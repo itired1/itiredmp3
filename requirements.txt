@@ -1,5 +1,5 @@
 Flask==2.3.3
-yandex-music==2.0.3  # ← Попробуйте эту версию
+yandex-music==2.1.0 
 bcrypt==4.0.1
 Pillow==10.0.0
 python-dotenv==1.0.0
