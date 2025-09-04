@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>itired - Вход</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="login-page">
+    <div class="login-container">
+        <div class="login-card">
+            <div class="logo">
+                <h1>itired</h1>
+                <p>Ваша музыкальная платформа</p>
+            </div>
+            
+            <form method="POST" class="login-form">
+                <h2>Вход в аккаунт</h2>
+                
+                {% if error %}
+                <div class="error-message">
+                    {{ error }}
+                </div>
+                {% endif %}
+                
+                <div class="input-group">
+                    <label for="token">Токен Яндекс.Музыки:</label>
+                    <input type="password" id="token" name="token" required 
+                           placeholder="Введите ваш OAuth-токен">
+                </div>
+                
+                <button type="submit" class="login-btn">Войти</button>
+            </form>
+            
+            <div class="help-section">
+                <h3>Как получить токен?</h3>
+                <ol>
+                    <li>Установите расширение <a href="https://github.com/MarshalX/yandex-music-token" target="_blank">Yandex Music Token</a></li>
+                    <li>Войдите в аккаунт Яндекс.Музыки</li>
+                    <li>Нажмите «Скопировать токен» в расширении</li>
+                    <li>Вставьте токен в поле выше</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
