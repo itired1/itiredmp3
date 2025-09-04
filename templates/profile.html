@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>itired - Профиль</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i class="fas fa-music"></i>
+                    <h1>itired</h1>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="/" class="nav-item">
+                    <i class="fas fa-home"></i>
+                    <span>Главная</span>
+                </a>
+                <a href="#" class="nav-item" onclick="switchTab('search')">
+                    <i class="fas fa-search"></i>
+                    <span>Поиск</span>
+                </a>
+                <a href="#" class="nav-item" onclick="switchTab('playlists')">
+                    <i class="fas fa-list"></i>
+                    <span>Плейлисты</span>
+                </a>
+                <a href="#" class="nav-item" onclick="switchTab('liked')">
+                    <i class="fas fa-heart"></i>
+                    <span>Лайки</span>
+                </a>
+                <a href="#" class="nav-item" onclick="switchTab('stats')">
+                    <i class="fas fa-chart-bar"></i>
+                    <span>Статистика</span>
+                </a>
+                <a href="/profile" class="nav-item active">
+                    <i class="fas fa-user"></i>
+                    <span>Профиль</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="user-card">
+                    <div class="user-avatar" id="userAvatar">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <div class="user-info">
+                        <span class="username" id="sidebarUsername">Загрузка...</span>
+                        <span class="user-status">Online</span>
+                    </div>
+                    <button class="logout-btn" onclick="logout()" title="Выйти">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <header class="content-header">
+                <div class="header-left">
+                    <button class="menu-toggle" onclick="toggleSidebar()">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <h1>Профиль пользователя</h1>
+                </div>
+                
+                <div class="header-actions">
+                    <button class="action-btn" title="Друзья" onclick="openFriendsModal()">
+                        <i class="fas fa-users"></i>
+                    </button>
+                    <button class="action-btn" title="Настройки" onclick="openModal('settingsModal')">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                </div>
+            </header>
+
+            <div class="content">
+                <div class="profile-container">
+                    <div class="profile-card">
+                        <div class="profile-header">
+                            <div class="avatar-upload">
+                                <div class="avatar-preview" id="avatarPreview">
+                                    <i class="fas fa-user"></i>
+                                </div>
+                                <input type="file" id="avatarInput" accept="image/*" hidden>
+                                <button class="avatar-edit-btn" onclick="document.getElementById('avatarInput').click()">
+                                    <i class="fas fa-camera"></i>
+                                </button>
+                            </div>
+                            
+                            <div class="profile-info">
+                                <h2 id="profileDisplayName">Загрузка...</h2>
+                                <p id="profileUsername">@username</p>
+                                
+                                <div class="profile-social">
+                                    <div class="social-stats">
+                                        <div class="stat">
+                                            <span class="stat-number" id="friendsCount">0</span>
+                                            <span class="stat-label">друзей</span>
+                                        </div>
+                                        <div class="stat">
+                                            <span class="stat-number" id="tastesMatch">0%</span>
+                                            <span class="stat-label">совпадение вкусов</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <form id="profileForm" class="profile-form">
+                            <div class="form-section">
+                                <h3>Основная информация</h3>
+                                
+                                <div class="input-group">
+                                    <label for="display_name">Отображаемое имя</label>
+                                    <input type="text" id="display_name" name="display_name" 
+                                           placeholder="Как вас будут видеть другие">
+                                </div>
+
+                                <div class="input-group">
+                                    <label for="bio">О себе</label>
+                                    <textarea id="bio" name="bio" rows="3" 
+                                              placeholder="Расскажите о своих музыкальных вкусах..."></textarea>
+                                </div>
+
+                                <div class="input-group">
+                                    <label for="avatar_url">URL аватара</label>
+                                    <input type="url" id="avatar_url" name="avatar_url" 
+                                           placeholder="https://example.com/avatar.jpg">
+                                </div>
+                            </div>
+
+                            <div class="form-section">
+                                <h3>Интеграция с Яндекс.Музыкой</h3>
+                                <div class="integration-status" id="yandexStatus">
+                                    <div class="status-loading">
+                                        <i class="fas fa-spinner fa-spin"></i>
+                                        <span>Проверка подключения...</span>
+                                    </div>
+                                </div>
+
+                                <div class="input-group">
+                                    <label for="yandex_token">OAuth Токен Яндекс.Музыки</label>
+                                    <input type="password" id="yandex_token" name="yandex_token" 
+                                           placeholder="Введите ваш токен">
+                                    <div class="help-text">
+                                        <a href="https://github.com/MarshalX/yandex-music-token" target="_blank">
+                                            Как получить токен?
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-actions">
+                                <button type="submit" class="save-btn">
+                                    <i class="fas fa-save"></i> Сохранить изменения
+                                </button>
+                                <button type="button" class="cancel-btn" onclick="window.history.back()">
+                                    Отмена
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="profile-sidebar">
+                        <div class="info-card">
+                            <h4>Информация об аккаунте</h4>
+                            <div class="info-item">
+                                <span class="info-label">Дата регистрации:</span>
+                                <span class="info-value" id="joinDate">—</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Статус:</span>
+                                <span class="info-value premium">Premium</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Лайкнуто треков:</span>
+                                <span class="info-value" id="totalTracks">0</span>
+                            </div>
+                        </div>
+
+                        <div class="info-card">
+                            <h4>Музыкальные предпочтения</h4>
+                            <div class="info-item">
+                                <span class="info-label">Любимый жанр:</span>
+                                <span class="info-value" id="topGenre">—</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Топ исполнитель:</span>
+                                <span class="info-value" id="topArtist">—</span>
+                            </div>
+                        </div>
+
+                        <div class="action-card">
+                            <h4>Социальные действия</h4>
+                            <button class="action-btn full-width" onclick="openFriendsModal()">
+                                <i class="fas fa-users"></i> Мои друзья
+                            </button>
+                            <button class="action-btn full-width" onclick="findMusicFriends()">
+                                <i class="fas fa-search"></i> Найти друзей
+                            </button>
+                            <button class="action-btn full-width" onclick="shareProfile()">
+                                <i class="fas fa-share"></i> Поделиться профилем
+                            </button>
+                            <button class="action-btn full-width danger" onclick="logout()">
+                                <i class="fas fa-sign-out-alt"></i> Выйти
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="profile-activity">
+                    <h3>Музыкальная активность</h3>
+                    <div class="activity-feed" id="activityFeed">
+                        <div class="loading">Загрузка активности...</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer class="player">
+            <div class="player-main">
+                <div class="player-track">
+                    <div class="track-cover" id="playerCover">
+                        <i class="fas fa-music"></i>
+                    </div>
+                    <div class="track-details">
+                        <span class="track-title" id="currentTrack">Выберите трек</span>
+                        <span class="track-artist" id="currentArtist">—</span>
+                    </div>
+                </div>
+
+                <div class="player-controls">
+                    <button class="control-btn" onclick="togglePlay()" title="Воспроизвести/Пауза">
+                        <i class="fas fa-play" id="playIcon"></i>
+                    </button>
+                </div>
+
+                <div class="player-progress">
+                    <span class="time-display" id="currentTime">0:00</span>
+                    <div class="progress-bar" onclick="seekTrack(event)">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <span class="time-display" id="totalTime">0:00</span>
+                </div>
+            </div>
+
+            <div class="player-volume">
+                <i class="fas fa-volume-up"></i>
+                <input type="range" id="volumeSlider" min="0" max="100" value="80" oninput="changeVolume(this.value)">
+            </div>
+        </footer>
+    </div>
+
+    <!-- Модальные окна -->
+    <div id="friendsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Музыкальные друзья</h3>
+                <button class="modal-close" onclick="closeModal('friendsModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="friends-tabs">
+                    <button class="tab-btn active" onclick="showFriendsTab('all')">Все друзья</button>
+                    <button class="tab-btn" onclick="showFriendsTab('requests')">Запросы</button>
+                    <button class="tab-btn" onclick="showFriendsTab('suggestions')">Предложения</button>
+                </div>
+                
+                <div class="friends-search">
+                    <input type="text" id="friendsSearch" placeholder="Поиск друзей..." oninput="searchFriends()">
+                </div>
+                
+                <div class="friends-list" id="friendsList">
+                    <div class="loading">Загрузка друзей...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Настройки</h3>
+                <button class="modal-close" onclick="closeModal('settingsModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="settingsForm">
+                    <div class="input-group">
+                        <label for="themeSelect">Тема:</label>
+                        <select id="themeSelect" name="theme">
+                            <option value="dark">Темная</option>
+                            <option value="light">Светлая</option>
+                            <option value="auto">Системная</option>
+                        </select>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="languageSelect">Язык:</label>
+                        <select id="languageSelect" name="language">
+                            <option value="ru">Русский</option>
+                            <option value="en">English</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="submit" class="save-btn">Сохранить</button>
+                        <button type="button" class="cancel-btn" onclick="closeModal('settingsModal')">Отмена</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <audio id="audioPlayer" hidden></audio>
+
+    <script src="/static/js/profile.js"></script>
+</body>
+</html>
