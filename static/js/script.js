@@ -6,12 +6,14 @@ let currentPlaylist = [];
 let currentTrackIndex = 0;
 let isShuffle = false;
 let isRepeat = false;
+let currentService = 'yandex';
 
 document.addEventListener('DOMContentLoaded', function() {
     initApp();
     setupEventListeners();
     initAudioPlayer();
     applySavedTheme();
+    loadServiceSetting();
 });
 
 function initApp() {
@@ -23,6 +25,31 @@ function initApp() {
 function applySavedTheme() {
     const savedTheme = localStorage.getItem('theme') || 'dark';
     document.body.setAttribute('data-theme', savedTheme);
+}
+
+function loadServiceSetting() {
+    apiCall('settings')
+        .then(settings => {
+            if (settings && settings.music_service) {
+                currentService = settings.music_service;
+                updateServiceUI();
+            }
+        })
+        .catch(console.error);
+}
+
+function updateServiceUI() {
+    const serviceSelect = document.getElementById('musicService');
+    if (serviceSelect) {
+        serviceSelect.value = currentService;
+    }
+    
+    // Обновляем иконку сервиса в интерфейсе
+    const serviceIcon = document.getElementById('currentServiceIcon');
+    if (serviceIcon) {
+        serviceIcon.className = currentService === 'yandex' ? 'fab fa-yandex' : 'fab fa-vk';
+        serviceIcon.title = currentService === 'yandex' ? 'Яндекс.Музыка' : 'VK Музыка';
+    }
 }
 
 function initAudioPlayer() {
@@ -113,6 +140,28 @@ function setupEventListeners() {
             changeVolume(this.value);
         });
     }
+
+    const serviceSelect = document.getElementById('musicService');
+    if (serviceSelect) {
+        serviceSelect.addEventListener('change', function() {
+            currentService = this.value;
+            saveServiceSetting();
+            showNotification(`Сервис изменен на: ${this.value === 'yandex' ? 'Яндекс.Музыка' : 'VK Музыка'}`, 'success');
+            loadDashboard();
+        });
+    }
+}
+
+async function saveServiceSetting() {
+    try {
+        await apiCall('settings', {
+            method: 'POST',
+            body: JSON.stringify({ music_service: currentService })
+        });
+        updateServiceUI();
+    } catch (error) {
+        console.error('Error saving service setting:', error);
+    }
 }
 
 async function apiCall(endpoint, options = {}) {
@@ -122,6 +171,7 @@ async function apiCall(endpoint, options = {}) {
                 'Content-Type': 'application/json',
                 ...options.headers
             },
+            credentials: 'include',
             ...options
         });
         
@@ -164,10 +214,20 @@ async function checkYandexToken() {
     }
 }
 
+async function checkVkToken() {
+    try {
+        const response = await apiCall('check_vk_token');
+        return response;
+    } catch (error) {
+        return { valid: false, message: 'Ошибка проверки токена' };
+    }
+}
+
 async function loadProfile() {
     try {
         const profile = await apiCall('profile');
         updateProfileUI(profile);
+        updateHeaderProfile(profile);
     } catch (error) {
         console.error('Error loading profile:', error);
     }
@@ -192,9 +252,31 @@ function updateProfileUI(profile) {
     }
 }
 
+function updateHeaderProfile(profile) {
+    if (profile && profile.local) {
+        const headerUsername = document.getElementById('headerUsername');
+        const headerUserAvatar = document.getElementById('headerUserAvatar');
+        
+        if (headerUsername) headerUsername.textContent = profile.local.username;
+        
+        if (headerUserAvatar) {
+            if (profile.local.avatar_url) {
+                headerUserAvatar.innerHTML = '<img src="' + profile.local.avatar_url + '" alt="' + (profile.local.display_name || profile.local.username) + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover">';
+            } else {
+                headerUserAvatar.innerHTML = '<i class="fas fa-user"></i>';
+            }
+        }
+    }
+}
+
 async function loadDashboard() {
     try {
-        const tokenStatus = await checkYandexToken();
+        let tokenStatus;
+        if (currentService === 'yandex') {
+            tokenStatus = await checkYandexToken();
+        } else {
+            tokenStatus = await checkVkToken();
+        }
         
         if (!tokenStatus.valid) {
             displayRecommendations([]);
@@ -230,13 +312,13 @@ function displayRecommendations(recommendations) {
     if (!grid) return;
     
     if (!recommendations || recommendations.length === 0) {
-        grid.innerHTML = '<div class="error">Нет рекомендаций</div>';
+        grid.innerHTML = '<div class="error">Нет рекомендаций. Настройте токен музыки.</div>';
         return;
     }
     
     let html = '';
     recommendations.forEach(function(item) {
-        html += '<div class="playlist-card" onclick="showPlaylist(' + item.id + ')">';
+        html += '<div class="playlist-card" onclick="showItem(\'' + item.id + '\', \'' + item.type + '\')">';
         if (item.cover_uri) {
             html += '<img src="' + item.cover_uri + '" alt="' + item.title + '" class="playlist-cover">';
         } else {
@@ -245,7 +327,12 @@ function displayRecommendations(recommendations) {
             html += '</div>';
         }
         html += '<h4>' + item.title + '</h4>';
-        html += '<p>' + (item.track_count || 0) + ' треков</p>';
+        if (item.type === 'track') {
+            html += '<p>' + (item.artists ? item.artists.join(', ') : '') + '</p>';
+        } else {
+            html += '<p>' + (item.track_count || 0) + ' треков</p>';
+        }
+        html += '<span class="service-badge ' + item.service + '">' + (item.service === 'yandex' ? 'Y' : 'VK') + '</span>';
         html += '</div>';
     });
     
@@ -276,6 +363,7 @@ function displayRecentTracks(tracks) {
         html += '<p>' + (track.artists ? track.artists.join(', ') : '') + ' • ' + (track.album || '') + '</p>';
         html += '</div>';
         html += '<span class="track-duration">' + formatDuration(track.duration) + '</span>';
+        html += '<span class="service-badge ' + track.service + '">' + (track.service === 'yandex' ? 'Y' : 'VK') + '</span>';
         html += '</div>';
     });
     
@@ -284,11 +372,17 @@ function displayRecentTracks(tracks) {
 
 async function loadPlaylists() {
     try {
-        const tokenStatus = await checkYandexToken();
+        let tokenStatus;
+        if (currentService === 'yandex') {
+            tokenStatus = await checkYandexToken();
+        } else {
+            tokenStatus = await checkVkToken();
+        }
+        
         if (!tokenStatus.valid) {
             const grid = document.getElementById('playlistsGrid');
             if (grid) {
-                grid.innerHTML = '<div class="error">Настройте токен Яндекс.Музыки</div>';
+                grid.innerHTML = '<div class="error">Настройте токен музыки</div>';
             }
             return;
         }
@@ -307,7 +401,7 @@ async function loadPlaylists() {
             
             let html = '';
             playlists.forEach(function(playlist) {
-                html += '<div class="playlist-card" onclick="showPlaylist(' + playlist.id + ')">';
+                html += '<div class="playlist-card" onclick="showPlaylist(\'' + playlist.id + '\')">';
                 if (playlist.cover_uri) {
                     html += '<img src="' + playlist.cover_uri + '" alt="' + playlist.title + '" class="playlist-cover">';
                 } else {
@@ -320,6 +414,7 @@ async function loadPlaylists() {
                 if (playlist.description) {
                     html += '<p style="font-size:0.8em;margin-top:5px">' + playlist.description + '</p>';
                 }
+                html += '<span class="service-badge ' + playlist.service + '">' + (playlist.service === 'yandex' ? 'Y' : 'VK') + '</span>';
                 html += '</div>';
             });
             
@@ -335,11 +430,17 @@ async function loadPlaylists() {
 
 async function loadLikedTracks() {
     try {
-        const tokenStatus = await checkYandexToken();
+        let tokenStatus;
+        if (currentService === 'yandex') {
+            tokenStatus = await checkYandexToken();
+        } else {
+            tokenStatus = await checkVkToken();
+        }
+        
         if (!tokenStatus.valid) {
             const container = document.getElementById('likedTracks');
             if (container) {
-                container.innerHTML = '<div class="error">Настройте токен Яндекс.Музыки</div>';
+                container.innerHTML = '<div class="error">Настройте токен музыки</div>';
             }
             return;
         }
@@ -373,6 +474,7 @@ async function loadLikedTracks() {
                 html += '<p>' + (track.artists ? track.artists.join(', ') : '') + ' • ' + (track.album || '') + ' • ' + (track.year || '') + '</p>';
                 html += '</div>';
                 html += '<span class="track-duration">' + formatDuration(track.duration) + '</span>';
+                html += '<span class="service-badge ' + track.service + '">' + (track.service === 'yandex' ? 'Y' : 'VK') + '</span>';
                 html += '</div>';
             });
             
@@ -388,11 +490,17 @@ async function loadLikedTracks() {
 
 async function loadStats() {
     try {
-        const tokenStatus = await checkYandexToken();
+        let tokenStatus;
+        if (currentService === 'yandex') {
+            tokenStatus = await checkYandexToken();
+        } else {
+            tokenStatus = await checkVkToken();
+        }
+        
         if (!tokenStatus.valid) {
             const statsGrid = document.getElementById('statsGrid');
             if (statsGrid) {
-                statsGrid.innerHTML = '<div class="error">Настройте токен Яндекс.Музыки</div>';
+                statsGrid.innerHTML = '<div class="error">Настройте токен музыки</div>';
             }
             return;
         }
@@ -475,9 +583,15 @@ async function performSearch() {
     if (!query) return;
     
     try {
-        const tokenStatus = await checkYandexToken();
+        let tokenStatus;
+        if (currentService === 'yandex') {
+            tokenStatus = await checkYandexToken();
+        } else {
+            tokenStatus = await checkVkToken();
+        }
+        
         if (!tokenStatus.valid) {
-            showNotification('Настройте токен Яндекс.Музыки для поиска', 'warning');
+            showNotification('Настройте токен музыки для поиска', 'warning');
             return;
         }
 
@@ -513,6 +627,7 @@ function displaySearchResults(results) {
             html += '<p>' + (track.artists ? track.artists.join(', ') : '') + ' • ' + (track.album || '') + '</p>';
             html += '</div>';
             html += '<span class="track-duration">' + formatDuration(track.duration) + '</span>';
+            html += '<span class="service-badge ' + track.service + '">' + (track.service === 'yandex' ? 'Y' : 'VK') + '</span>';
             html += '</div>';
         });
     }
@@ -532,6 +647,7 @@ function displaySearchResults(results) {
             html += '<h4>' + album.title + '</h4>';
             html += '<p>' + (album.artists ? album.artists.join(', ') : '') + ' • ' + (album.year || '') + '</p>';
             html += '<p>' + (album.track_count || 0) + ' треков</p>';
+            html += '<span class="service-badge ' + album.service + '">' + (album.service === 'yandex' ? 'Y' : 'VK') + '</span>';
             html += '</div>';
         });
         html += '</div>';
@@ -547,6 +663,7 @@ function displaySearchResults(results) {
             html += '</div>';
             html += '<h4>' + artist.name + '</h4>';
             html += '<p>' + (artist.genres ? artist.genres.join(', ') : 'Жанры не указаны') + '</p>';
+            html += '<span class="service-badge ' + artist.service + '">' + (artist.service === 'yandex' ? 'Y' : 'VK') + '</span>';
             html += '</div>';
         });
         html += '</div>';
@@ -586,9 +703,9 @@ function switchTab(tabName) {
     });
     
     document.querySelectorAll('.tab-content').forEach(function(tab) {
-        tab.classList.remove('active');
+        tab.style.display = 'none';
         if (tab.id === tabName) {
-            tab.classList.add('active');
+            tab.style.display = 'block';
         }
     });
     
@@ -628,13 +745,21 @@ function toggleSidebar() {
 
 async function playTrack(trackId) {
     try {
-        const tokenStatus = await checkYandexToken();
+        let tokenStatus;
+        const [service, id] = trackId.split('_');
+        
+        if (service === 'yandex') {
+            tokenStatus = await checkYandexToken();
+        } else {
+            tokenStatus = await checkVkToken();
+        }
+        
         if (!tokenStatus.valid) {
-            showNotification('Настройте токен Яндекс.Музыки для воспроизведения', 'warning');
+            showNotification('Настройте токен музыки для воспроизведения', 'warning');
             return;
         }
 
-        const trackData = await apiCall('play_track/' + trackId);
+        const trackData = await apiCall('play_track/' + service + '_' + id);
         if (trackData.url) {
             audioPlayer.pause();
             audioPlayer.src = trackData.url;
@@ -672,6 +797,13 @@ function updatePlayerUI(trackData) {
     }
     
     playerCover.classList.add('playing');
+    
+    // Обновляем иконку сервиса в плеере
+    const serviceIcon = document.getElementById('currentServiceIcon');
+    if (serviceIcon) {
+        serviceIcon.className = trackData.service === 'yandex' ? 'fab fa-yandex' : 'fab fa-vk';
+        serviceIcon.title = trackData.service === 'yandex' ? 'Яндекс.Музыка' : 'VK Музыка';
+    }
 }
 
 function togglePlay() {
@@ -770,7 +902,15 @@ function addToFavorites() {
 }
 
 function showPlaylist(playlistId) {
-    showNotification('Функция открытия плейлиста в разработке', 'info');
+    showNotification('Открытие плейлиста: ' + playlistId, 'info');
+}
+
+function showItem(itemId, type) {
+    if (type === 'track') {
+        playTrack(itemId);
+    } else {
+        showNotification('Открытие: ' + type + ' ' + itemId, 'info');
+    }
 }
 
 function formatDuration(ms) {
@@ -822,6 +962,7 @@ function updateSettingsUI(settings) {
     const themeSelect = document.getElementById('themeSelect');
     const languageSelect = document.getElementById('languageSelect');
     const autoPlayToggle = document.getElementById('autoPlayToggle');
+    const musicServiceSelect = document.getElementById('musicService');
     
     if (themeSelect && settings.theme) {
         themeSelect.value = settings.theme;
@@ -832,6 +973,11 @@ function updateSettingsUI(settings) {
     if (autoPlayToggle && settings.auto_play !== undefined) {
         autoPlayToggle.checked = settings.auto_play;
     }
+    if (musicServiceSelect && settings.music_service) {
+        musicServiceSelect.value = settings.music_service;
+        currentService = settings.music_service;
+        updateServiceUI();
+    }
 }
 
 async function saveSettings() {
@@ -839,7 +985,8 @@ async function saveSettings() {
         const settings = {
             theme: document.getElementById('themeSelect').value,
             language: document.getElementById('languageSelect').value,
-            auto_play: document.getElementById('autoPlayToggle').checked
+            auto_play: document.getElementById('autoPlayToggle').checked,
+            music_service: document.getElementById('musicService').value
         };
         
         const response = await apiCall('settings', {
@@ -850,6 +997,8 @@ async function saveSettings() {
         if (response.success) {
             showNotification('Настройки сохранены', 'success');
             applyTheme(settings.theme);
+            currentService = settings.music_service;
+            updateServiceUI();
             closeModal('settingsModal');
         }
     } catch (error) {
@@ -893,8 +1042,4 @@ function showNotification(message, type = 'info') {
     setTimeout(() => {
         notification.remove();
     }, 3000);
-}
-
-function createNewPlaylist() {
-    showNotification('Функция создания плейлиста в разработке', 'info');
 }

@@ -156,6 +156,28 @@
                                 </div>
                             </div>
 
+                            <div class="form-section">
+                                <h3>Интеграция с VK Музыкой</h3>
+                                <div class="integration-status" id="vkStatus">
+                                    <div class="status-loading">
+                                        <i class="fas fa-spinner fa-spin"></i>
+                                        <span>Проверка подключения...</span>
+                                    </div>
+                                </div>
+
+                                <div class="input-group">
+                                    <label for="vk_token">Токен VK Музыки</label>
+                                    <input type="password" id="vk_token" name="vk_token" 
+                                           placeholder="Введите ваш токен VK">
+                                    <div class="help-text">
+                                        <a href="https://vkhost.github.io/" target="_blank">
+                                            Как получить токен VK?
+                                        </a>
+                                        <p>Выберите "Audio", разрешите доступ и скопируйте часть URL после access_token= до &expires_in</p>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div class="form-actions">
                                 <button type="submit" class="save-btn">
                                     <i class="fas fa-save"></i> Сохранить изменения
@@ -176,7 +198,7 @@
                             </div>
                             <div class="info-item">
                                 <span class="info-label">Статус:</span>
-                                <span class="info-value premium">Premium</span>
+                                <span class="info-value premium">Active</span>
                             </div>
                             <div class="info-item">
                                 <span class="info-label">Лайкнуто треков:</span>
@@ -296,6 +318,8 @@
                             <option value="dark">Темная</option>
                             <option value="light">Светлая</option>
                             <option value="auto">Системная</option>
+                            <option value="blue">Синяя</option>
+                            <option value="green">Зеленая</option>
                         </select>
                     </div>
                     
@@ -305,6 +329,28 @@
                             <option value="ru">Русский</option>
                             <option value="en">English</option>
                         </select>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="musicService">Музыкальный сервис:</label>
+                        <select id="musicService" name="music_service">
+                            <option value="yandex">Яндекс.Музыка</option>
+                            <option value="vk">VK Музыка</option>
+                        </select>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="autoPlayToggle" name="auto_play">
+                            <span>Автовоспроизведение</span>
+                        </label>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="showExplicitToggle" name="show_explicit">
+                            <span>Показывать эксплицитный контент</span>
+                        </label>
                     </div>
                     
                     <div class="form-actions">

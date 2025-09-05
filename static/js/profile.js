@@ -61,24 +61,31 @@ function setupAvatarUpload() {
 }
 
 function setupTokenValidation() {
-    const tokenInput = document.getElementById('yandex_token');
-    if (!tokenInput) return;
+    const yandexTokenInput = document.getElementById('yandex_token');
+    const vkTokenInput = document.getElementById('vk_token');
     
-    const validateBtn = document.createElement('button');
-    validateBtn.type = 'button';
-    validateBtn.innerHTML = '<i class="fas fa-check"></i> Проверить';
-    validateBtn.style.marginTop = '8px';
-    validateBtn.className = 'validate-btn';
+    if (yandexTokenInput) {
+        const validateBtn = document.createElement('button');
+        validateBtn.type = 'button';
+        validateBtn.innerHTML = '<i class="fas fa-check"></i> Проверить';
+        validateBtn.style.marginTop = '8px';
+        validateBtn.className = 'validate-btn';
+        validateBtn.onclick = () => validateAndSaveToken('yandex', yandexTokenInput.value);
+        yandexTokenInput.parentNode.appendChild(validateBtn);
+    }
     
-    tokenInput.parentNode.appendChild(validateBtn);
-    
-    validateBtn.addEventListener('click', validateAndSaveToken);
+    if (vkTokenInput) {
+        const validateBtn = document.createElement('button');
+        validateBtn.type = 'button';
+        validateBtn.innerHTML = '<i class="fas fa-check"></i> Проверить';
+        validateBtn.style.marginTop = '8px';
+        validateBtn.className = 'validate-btn';
+        validateBtn.onclick = () => validateAndSaveToken('vk', vkTokenInput.value);
+        vkTokenInput.parentNode.appendChild(validateBtn);
+    }
 }
 
-async function validateAndSaveToken() {
-    const tokenInput = document.getElementById('yandex_token');
-    const token = tokenInput.value.trim();
-    
+async function validateAndSaveToken(service, token) {
     if (!token) {
         showNotification('Введите токен для проверки', 'error');
         return;
@@ -90,17 +97,14 @@ async function validateAndSaveToken() {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ token: token })
+            body: JSON.stringify({ token: token, service: service })
         });
         
         const result = await response.json();
         
         if (result.success) {
             showNotification(result.message, 'success');
-            checkYandexStatus({
-                yandex: result.account,
-                local: { yandex_token_set: true }
-            });
+            loadProfileData();
         } else {
             showNotification(result.message, 'error');
         }
@@ -139,12 +143,12 @@ function updateUserStats(stats) {
         document.getElementById('totalTracks').textContent = stats.total_liked_tracks;
     }
     
-    if (stats.genre_stats && Object.keys(stats.genre_stats).length > 0) {
-        const topGenre = Object.entries(stats.genre_stats)
-            .sort(([,a], [,b]) => b - a)[0];
-        if (topGenre) {
-            document.getElementById('topGenre').textContent = topGenre[0];
-        }
+    if (stats.top_genre) {
+        document.getElementById('topGenre').textContent = stats.top_genre;
+    }
+    
+    if (stats.top_artist) {
+        document.getElementById('topArtist').textContent = stats.top_artist;
     }
 }
 
@@ -154,6 +158,7 @@ function updateProfileForm(profile) {
         document.getElementById('bio').value = profile.local.bio || '';
         document.getElementById('avatar_url').value = profile.local.avatar_url || '';
         document.getElementById('yandex_token').value = profile.local.yandex_token || '';
+        document.getElementById('vk_token').value = profile.local.vk_token || '';
         
         document.getElementById('profileDisplayName').textContent = profile.local.display_name || profile.local.username;
         document.getElementById('profileUsername').textContent = '@' + profile.local.username;
@@ -174,38 +179,68 @@ function updateProfileForm(profile) {
             document.getElementById('joinDate').textContent = new Date(profile.local.created_at).toLocaleDateString('ru-RU');
         }
         
-        checkYandexStatus(profile);
+        updateTokenStatus(profile);
     }
 }
 
-function checkYandexStatus(profile) {
-    const statusElement = document.getElementById('yandexStatus');
-    if (!statusElement) return;
+function updateTokenStatus(profile) {
+    const yandexStatus = document.getElementById('yandexStatus');
+    const vkStatus = document.getElementById('vkStatus');
     
-    if (profile.yandex) {
-        statusElement.innerHTML = `
-            <div class="status-connected">
-                <i class="fas fa-check-circle" style="color:var(--success)"></i>
-                <span>Подключено к Яндекс.Музыке</span>
-                <div style="font-size:0.8em;margin-top:4px;color:var(--text-secondary)">
-                    ${profile.yandex.name} • ${profile.yandex.premium ? 'Premium' : 'Бесплатный'}
+    if (yandexStatus) {
+        if (profile.yandex) {
+            yandexStatus.innerHTML = `
+                <div class="status-connected">
+                    <i class="fas fa-check-circle" style="color:var(--success)"></i>
+                    <span>Подключено к Яндекс.Музыке</span>
+                    <div style="font-size:0.8em;margin-top:4px;color:var(--text-secondary)">
+                        ${profile.yandex.name} • ${profile.yandex.premium ? 'Premium' : 'Бесплатный'}
+                    </div>
                 </div>
-            </div>
-        `;
-    } else if (profile.local.yandex_token_set) {
-        statusElement.innerHTML = `
-            <div class="status-error">
-                <i class="fas fa-exclamation-triangle" style="color:var(--warning)"></i>
-                <span>Ошибка подключения. Проверьте токен.</span>
-            </div>
-        `;
-    } else {
-        statusElement.innerHTML = `
-            <div class="status-disconnected">
-                <i class="fas fa-plug" style="color:var(--text-secondary)"></i>
-                <span>Не подключено к Яндекс.Музыке</span>
-            </div>
-        `;
+            `;
+        } else if (profile.local.yandex_token_set) {
+            yandexStatus.innerHTML = `
+                <div class="status-error">
+                    <i class="fas fa-exclamation-triangle" style="color:var(--warning)"></i>
+                    <span>Ошибка подключения. Проверьте токен.</span>
+                </div>
+            `;
+        } else {
+            yandexStatus.innerHTML = `
+                <div class="status-disconnected">
+                    <i class="fas fa-plug" style="color:var(--text-secondary)"></i>
+                    <span>Не подключено к Яндекс.Музыке</span>
+                </div>
+            `;
+        }
+    }
+    
+    if (vkStatus) {
+        if (profile.vk) {
+            vkStatus.innerHTML = `
+                <div class="status-connected">
+                    <i class="fas fa-check-circle" style="color:var(--success)"></i>
+                    <span>Подключено к VK Музыке</span>
+                    <div style="font-size:0.8em;margin-top:4px;color:var(--text-secondary)">
+                        ${profile.vk.full_name}
+                    </div>
+                </div>
+            `;
+        } else if (profile.local.vk_token_set) {
+            vkStatus.innerHTML = `
+                <div class="status-error">
+                    <i class="fas fa-exclamation-triangle" style="color:var(--warning)"></i>
+                    <span>Ошибка подключения. Проверьте токен.</span>
+                </div>
+            `;
+        } else {
+            vkStatus.innerHTML = `
+                <div class="status-disconnected">
+                    <i class="fas fa-plug" style="color:var(--text-secondary)"></i>
+                    <span>Не подключено к VK Музыке</span>
+                </div>
+            `;
+        }
     }
 }
 
@@ -221,7 +256,8 @@ function setupProfileForm() {
             display_name: formData.get('display_name'),
             bio: formData.get('bio'),
             avatar_url: formData.get('avatar_url'),
-            yandex_token: formData.get('yandex_token')
+            yandex_token: formData.get('yandex_token'),
+            vk_token: formData.get('vk_token')
         };
         
         const avatarInput = document.getElementById('avatarInput');
@@ -271,7 +307,6 @@ function readFileAsDataURL(file) {
     });
 }
 
-// Система друзей
 async function loadFriends() {
     try {
         const response = await fetch('/api/friends');
@@ -286,7 +321,7 @@ async function loadFriends() {
 
 async function loadActivityFeed() {
     try {
-        const response = await fetch('/api/activity');
+        const response = await fetch('/api/user/activity');
         if (response.ok) {
             const activity = await response.json();
             displayActivityFeed(activity);
@@ -323,7 +358,7 @@ function showFriendsTab(tab) {
     displayFriends(friendsList.filter(friend => {
         switch(tab) {
             case 'requests': return friend.status === 'pending' && friend.direction === 'incoming';
-            case 'suggestions': return friend.status === 'suggestion';
+            case 'suggestions': return false;
             default: return friend.status === 'accepted' || friend.status === 'pending';
         }
     }));
@@ -335,7 +370,7 @@ function displayFriends(friends) {
     if (!friends || friends.length === 0) {
         let message = '';
         switch(currentFriendsTab) {
-            case 'requests': message = 'Нет incoming запросов'; break;
+            case 'requests': message = 'Нет входящих запросов'; break;
             case 'suggestions': message = 'Нет предложений друзей'; break;
             default: message = 'Нет друзей';
         }
@@ -346,13 +381,6 @@ function displayFriends(friends) {
     let html = '';
     
     friends.forEach(friend => {
-        const activity = friend.current_activity ? `
-            <div class="friend-activity">
-                <i class="fas fa-music"></i>
-                <span>Слушает: ${friend.current_activity.track} - ${friend.current_activity.artist}</span>
-            </div>
-        ` : '';
-        
         const actions = friend.status === 'pending' && friend.direction === 'incoming' ? `
             <div class="friend-actions">
                 <button class="action-btn success" onclick="acceptFriend(${friend.id})">
@@ -362,19 +390,14 @@ function displayFriends(friends) {
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-        ` : friend.status === 'suggestion' ? `
+        ` : friend.status === 'pending' ? `
             <div class="friend-actions">
-                <button class="action-btn" onclick="addFriend(${friend.id})">
-                    <i class="fas fa-user-plus"></i>
-                </button>
+                <span style="color:var(--text-secondary);font-size:0.8em;">Ожидание</span>
             </div>
         ` : `
             <div class="friend-actions">
                 <button class="action-btn" onclick="viewFriendProfile(${friend.id})">
                     <i class="fas fa-eye"></i>
-                </button>
-                <button class="action-btn" onclick="sendMessage(${friend.id})">
-                    <i class="fas fa-comment"></i>
                 </button>
             </div>
         `;
@@ -383,7 +406,6 @@ function displayFriends(friends) {
         <div class="friend-item">
             <div class="friend-avatar">
                 <img src="${friend.avatar_url || '/static/default-avatar.png'}" alt="${friend.username}">
-                ${friend.is_online ? '<span class="online-status"></span>' : ''}
             </div>
             <div class="friend-info">
                 <h4>${friend.display_name || friend.username}</h4>
@@ -392,12 +414,6 @@ function displayFriends(friends) {
                     <div class="taste-match-bar">
                         <div class="taste-match-fill" style="width: ${friend.taste_match}%"></div>
                     </div>
-                </div>
-                ${activity}
-                <div class="friend-genres">
-                    ${friend.top_genres ? friend.top_genres.slice(0, 3).map(genre => 
-                        `<span class="genre-tag">${genre}</span>`
-                    ).join('') : ''}
                 </div>
             </div>
             ${actions}
@@ -410,8 +426,7 @@ function displayFriends(friends) {
 function searchFriends() {
     const searchTerm = document.getElementById('friendsSearch').value.toLowerCase();
     const filteredFriends = friendsList.filter(friend => 
-        (friend.display_name || friend.username).toLowerCase().includes(searchTerm) ||
-        (friend.top_genres && friend.top_genres.some(genre => genre.toLowerCase().includes(searchTerm)))
+        (friend.display_name || friend.username).toLowerCase().includes(searchTerm)
     );
     displayFriends(filteredFriends);
 }
@@ -435,14 +450,7 @@ async function addFriend(userId) {
 
 async function acceptFriend(friendId) {
     try {
-        const response = await fetch(`/api/friends/accept/${friendId}`, {
-            method: 'POST'
-        });
-        
-        if (response.ok) {
-            showNotification('Запрос принят', 'success');
-            loadFriends();
-        }
+        showNotification('Функция принятия запроса в разработке', 'info');
     } catch (error) {
         showNotification('Ошибка принятия запроса', 'error');
     }
@@ -450,14 +458,7 @@ async function acceptFriend(friendId) {
 
 async function rejectFriend(friendId) {
     try {
-        const response = await fetch(`/api/friends/reject/${friendId}`, {
-            method: 'POST'
-        });
-        
-        if (response.ok) {
-            showNotification('Запрос отклонен', 'success');
-            loadFriends();
-        }
+        showNotification('Функция отклонения запроса в разработке', 'info');
     } catch (error) {
         showNotification('Ошибка отклонения запроса', 'error');
     }
@@ -469,11 +470,7 @@ function findMusicFriends() {
 }
 
 function viewFriendProfile(friendId) {
-    window.location.href = `/profile/${friendId}`;
-}
-
-function sendMessage(friendId) {
-    showNotification('Система сообщений в разработке', 'info');
+    showNotification('Просмотр профиля друга в разработке', 'info');
 }
 
 function displayActivityFeed(activities) {
@@ -497,7 +494,7 @@ function displayActivityFeed(activities) {
                 <span class="activity-time">${formatTime(activity.timestamp)}</span>
             </div>
             ${activity.track_id ? `
-            <button class="activity-action" onclick="playTrack(${activity.track_id})">
+            <button class="activity-action" onclick="playTrack('${activity.track_id}')">
                 <i class="fas fa-play"></i>
             </button>
             ` : ''}
@@ -521,15 +518,13 @@ function getActivityIcon(type) {
 function getActivityText(activity) {
     switch(activity.type) {
         case 'listen':
-            return `Слушаете: <strong>${activity.track}</strong> - ${activity.artist}`;
+            return `Слушали: <strong>${activity.track}</strong> - ${activity.artist}`;
         case 'like':
             return `Понравился: <strong>${activity.track}</strong> - ${activity.artist}`;
         case 'playlist':
             return `Создали плейлист: <strong>${activity.playlist_name}</strong>`;
         case 'friend':
-            return `Добавили в друзья: <strong>${activity.friend_name}</strong>`;
-        case 'share':
-            return `Поделились: <strong>${activity.track}</strong>`;
+            return `Добавили в друзья`;
         default:
             return activity.message;
     }
@@ -551,7 +546,6 @@ function formatTime(timestamp) {
     return activityTime.toLocaleDateString('ru-RU');
 }
 
-// Функции плеера
 function togglePlay() {
     if (audioPlayer.paused) {
         audioPlayer.play().catch(console.error);

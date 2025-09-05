@@ -13,12 +13,12 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import base64
-import random
 from PIL import Image
-import uuid
 from io import BytesIO
+import requests
+import vk_api
+import re
 
-# Настройка логирования
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -26,12 +26,10 @@ app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'itired-super-secret-key-2025')
 app.permanent_session_lifetime = timedelta(days=30)
 
-# Конфигурация БД
 DATABASE = 'itired.db'
 UPLOAD_FOLDER = 'static/uploads/avatars'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Настройки email
 EMAIL_CONFIG = {
     'smtp_server': 'smtp.gmail.com',
     'smtp_port': 587,
@@ -39,7 +37,6 @@ EMAIL_CONFIG = {
     'password': 'ozbg ahqs jack lerf'
 }
 
-# Исправление для Python 3.12+ (datetime адаптер)
 def adapt_datetime(dt):
     return dt.isoformat()
 
@@ -75,6 +72,7 @@ def init_db():
                 email TEXT UNIQUE,
                 password_hash TEXT NOT NULL,
                 yandex_token TEXT,
+                vk_token TEXT,
                 avatar_url TEXT,
                 bio TEXT,
                 email_verified BOOLEAN DEFAULT FALSE,
@@ -93,7 +91,35 @@ def init_db():
                 language TEXT DEFAULT 'ru',
                 auto_play BOOLEAN DEFAULT TRUE,
                 show_explicit BOOLEAN DEFAULT TRUE,
+                music_service TEXT DEFAULT 'yandex',
                 FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+        ''')
+        
+        # Таблица активности пользователя
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_activity (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                activity_type TEXT NOT NULL,
+                activity_data TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+        ''')
+        
+        # Таблица друзей
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS friends (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                friend_id INTEGER,
+                status TEXT DEFAULT 'pending',
+                taste_match INTEGER,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id),
+                FOREIGN KEY (friend_id) REFERENCES users (id),
+                UNIQUE(user_id, friend_id)
             )
         ''')
         
@@ -137,369 +163,64 @@ def get_yandex_client(user_id=None):
         logger.error(f"Error initializing Yandex Music client: {e}")
         return None
 
-def send_verification_email(email, verification_code):
-    """Отправка красивого email с кодом подтверждения в темных тонах"""
+def get_vk_client(user_id=None):
     try:
-        msg = MIMEMultipart('alternative')
+        db = get_db()
+        cursor = db.cursor()
+        if user_id:
+            cursor.execute('SELECT vk_token FROM users WHERE id = ?', (user_id,))
+            user = cursor.fetchone()
+            token = user[0] if user else None
+        else:
+            current_user = get_current_user()
+            token = current_user[6] if current_user else None
+        
+        if not token:
+            return None
+        
+        # токен из строки (если передан полный URL)
+        if 'access_token=' in token:
+            match = re.search(r'access_token=([^&]+)', token)
+            if match:
+                token = match.group(1)
+        
+        session = vk_api.VkApi(token=token)
+        return session.get_api()
+    except Exception as e:
+        logger.error(f"Error initializing VK client: {e}")
+        return None
+
+def get_current_music_service(user_id=None):
+    db = get_db()
+    cursor = db.cursor()
+    if not user_id:
+        user_id = session.get('user_id')
+    
+    cursor.execute('SELECT music_service FROM user_settings WHERE user_id = ?', (user_id,))
+    setting = cursor.fetchone()
+    return setting[0] if setting else 'yandex'
+
+def send_verification_email(email, verification_code):
+    try:
+        msg = MIMEText(f'Ваш код подтверждения: {verification_code}\nДействует 10 минут.', 'plain', 'utf-8')
         msg['From'] = f"itired 🎵 <{EMAIL_CONFIG['email']}>"
         msg['To'] = email
         msg['Subject'] = '🎵 Ваш код подтверждения для itired'
         
-        # Гифка из Pinterest (заменяем на прямую ссылку)
-        gif_url = "https://i.pinimg.com/originals/2d/44/59/2d4459a3160b5a621ae2e32a73f1e3b1.gif"
-        
-        html = f"""
-        <!DOCTYPE html>
-        <html lang="ru">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Подтверждение email - itired</title>
-            <style>
-                body {{
-                    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
-                    background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
-                    margin: 0;
-                    padding: 0;
-                    color: #ffffff;
-                    min-height: 100vh;
-                }}
-                .container {{
-                    max-width: 600px;
-                    margin: 0 auto;
-                    background: rgba(26, 26, 26, 0.95);
-                    border-radius: 20px;
-                    overflow: hidden;
-                    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
-                    border: 1px solid rgba(255, 255, 255, 0.1);
-                }}
-                .header {{
-                    background: linear-gradient(135deg, #ff6b6b 0%, #4ecdc4 100%);
-                    padding: 30px;
-                    text-align: center;
-                    position: relative;
-                    overflow: hidden;
-                }}
-                .logo {{
-                    font-size: 2.5em;
-                    font-weight: 800;
-                    margin-bottom: 10px;
-                    text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
-                }}
-                .tagline {{
-                    font-size: 1.1em;
-                    opacity: 0.9;
-                    font-weight: 500;
-                }}
-                .content {{
-                    padding: 40px;
-                }}
-                .welcome {{
-                    text-align: center;
-                    margin-bottom: 30px;
-                    font-size: 1.5em;
-                    font-weight: 600;
-                    background: linear-gradient(135deg, #ff6b6b 0%, #4ecdc4 100%);
-                    -webkit-background-clip: text;
-                    -webkit-text-fill-color: transparent;
-                }}
-                .gif-container {{
-                    text-align: center;
-                    margin: 30px 0;
-                }}
-                .gif-container img {{
-                    max-width: 100%;
-                    border-radius: 15px;
-                    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-                }}
-                .code-container {{
-                    background: rgba(255, 255, 255, 0.05);
-                    border-radius: 15px;
-                    padding: 30px;
-                    text-align: center;
-                    margin: 30px 0;
-                    border: 2px solid rgba(255, 107, 107, 0.3);
-                    position: relative;
-                    overflow: hidden;
-                }}
-                .code-container::before {{
-                    content: '';
-                    position: absolute;
-                    top: -50%;
-                    left: -50%;
-                    width: 200%;
-                    height: 200%;
-                    background: linear-gradient(45deg, transparent, rgba(255,107,107,0.1), transparent);
-                    animation: shimmer 3s infinite;
-                }}
-                .code-label {{
-                    font-size: 1.1em;
-                    margin-bottom: 20px;
-                    color: #a0a0a0;
-                    font-weight: 500;
-                }}
-                .verification-code {{
-                    font-size: 2.5em;
-                    font-weight: 800;
-                    font-family: 'Courier New', monospace;
-                    background: linear-gradient(135deg, #ff6b6b 0%, #4ecdc4 100%);
-                    -webkit-background-clip: text;
-                    -webkit-text-fill-color: transparent;
-                    letter-spacing: 8px;
-                    margin: 20px 0;
-                    text-shadow: 0 0 20px rgba(255,107,107,0.3);
-                    animation: pulse 2s infinite;
-                }}
-                .timer {{
-                    background: rgba(255, 107, 107, 0.2);
-                    color: #ff6b6b;
-                    padding: 12px 24px;
-                    border-radius: 25px;
-                    display: inline-block;
-                    font-size: 0.9em;
-                    font-weight: 600;
-                    margin-top: 15px;
-                }}
-                .security-note {{
-                    background: rgba(255, 193, 7, 0.1);
-                    border-left: 4px solid #ffc107;
-                    padding: 20px;
-                    margin: 30px 0;
-                    border-radius: 12px;
-                    font-size: 0.9em;
-                    line-height: 1.6;
-                }}
-                .features {{
-                    display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-                    gap: 20px;
-                    margin: 40px 0;
-                }}
-                .feature {{
-                    background: rgba(255, 255, 255, 0.03);
-                    padding: 20px;
-                    border-radius: 12px;
-                    border: 1px solid rgba(255, 255, 255, 0.1);
-                    transition: all 0.3s ease;
-                    text-align: center;
-                }}
-                .feature:hover {{
-                    background: rgba(255, 255, 255, 0.08);
-                    transform: translateY(-5px);
-                    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-                }}
-                .feature-icon {{
-                    font-size: 2em;
-                    margin-bottom: 15px;
-                    background: linear-gradient(135deg, #ff6b6b 0%, #4ecdc4 100%);
-                    -webkit-background-clip: text;
-                    -webkit-text-fill-color: transparent;
-                }}
-                .feature-title {{
-                    font-weight: 600;
-                    margin-bottom: 8px;
-                    color: #ffffff;
-                }}
-                .feature-desc {{
-                    color: #a0a0a0;
-                    font-size: 0.9em;
-                    line-height: 1.5;
-                }}
-                .footer {{
-                    background: rgba(0, 0, 0, 0.3);
-                    padding: 30px;
-                    text-align: center;
-                    color: rgba(255, 255, 255, 0.7);
-                    font-size: 0.9em;
-                    border-top: 1px solid rgba(255, 255, 255, 0.1);
-                }}
-                .social-links {{
-                    margin-top: 15px;
-                }}
-                .social-links a {{
-                    color: #ff6b6b;
-                    text-decoration: none;
-                    margin: 0 10px;
-                    transition: color 0.3s ease;
-                }}
-                .social-links a:hover {{
-                    color: #4ecdc4;
-                }}
-                @keyframes pulse {{
-                    0% {{ transform: scale(1); }}
-                    50% {{ transform: scale(1.05); }}
-                    100% {{ transform: scale(1); }}
-                }}
-                @keyframes shimmer {{
-                    0% {{ transform: translateX(-100%) translateY(-100%) rotate(45deg); }}
-                    100% {{ transform: translateX(100%) translateY(100%) rotate(45deg); }}
-                }}
-                @keyframes float {{
-                    0% {{ transform: translateY(0px); }}
-                    50% {{ transform: translateY(-10px); }}
-                    100% {{ transform: translateY(0px); }}
-                }}
-                .floating {{
-                    animation: float 3s ease-in-out infinite;
-                }}
-                @media (max-width: 600px) {{
-                    .content {{
-                        padding: 20px;
-                    }}
-                    .verification-code {{
-                        font-size: 2em;
-                        letter-spacing: 6px;
-                    }}
-                    .features {{
-                        grid-template-columns: 1fr;
-                    }}
-                }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <div class="logo">itired</div>
-                    <div class="tagline">Твоя музыкальная вселенная</div>
-                </div>
-                
-                <div class="content">
-                    <h2 class="welcome">Добро пожаловать в музыкальное сообщество! 🎶</h2>
-                    
-                    <div class="gif-container floating">
-                        <img src="{gif_url}" alt="Музыкальная анимация" style="max-width: 300px;">
-                    </div>
-                    
-                    <div class="code-container">
-                        <div class="code-label">Твой код подтверждения:</div>
-                        <div class="verification-code">{verification_code}</div>
-                        <div class="timer">⏰ Действует 10 минут</div>
-                    </div>
-                    
-                    <div class="security-note">
-                        <strong>🔒 Важная информация:</strong> Никогда не сообщай этот код третьим лицам. 
-                        Сотрудники itired никогда не запрашивают коды доступа. Если ты не регистрировался, 
-                        просто проигнорируй это письмо.
-                    </div>
-                    
-                    <div class="features">
-                        <div class="feature">
-                            <div class="feature-icon">🎵</div>
-                            <div class="feature-title">Миллионы треков</div>
-                            <div class="feature-desc">Доступ к огромной библиотеке музыки из любого уголка мира</div>
-                        </div>
-                        
-                        <div class="feature">
-                            <div class="feature-icon">❤️</div>
-                            <div class="feature-title">Персональные плейлисты</div>
-                            <div class="feature-desc">Музыка, которая идеально подходит именно тебе</div>
-                        </div>
-                        
-                        <div class="feature">
-                            <div class="feature-icon">👥</div>
-                            <div class="feature-title">Музыкальные друзья</div>
-                            <div class="feature-desc">Найди единомышленников и делитесь музыкой</div>
-                        </div>
-                        
-                        <div class="feature">
-                            <div class="feature-icon">📊</div>
-                            <div class="feature-title">Умная статистика</div>
-                            <div class="feature-desc">Отслеживай свои музыкальные предпочтения и открывай новое</div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="footer">
-                    <p>© 2024 itired · Твой персональный музыкальный опыт</p>
-                    <p>🎶 Служба поддержки: <a href="mailto:support@itired.com">support@itired.com</a></p>
-                    <p>📧 Это письмо отправлено автоматически</p>
-                    
-                    <div class="social-links">
-                        <a href="#">Instagram</a> • 
-                        <a href="#">Telegram</a> • 
-                        <a href="#">VK</a>
-                    </div>
-                </div>
-            </div>
-        </body>
-        </html>
-        """
-        
-        # Текстовый вариант для почтовых клиентов, которые не поддерживают HTML
-        text = f"""
-        ДОБРО ПОЖАЛОВАТЬ В ITIRED! 🎵
-        
-        Твой код подтверждения: {verification_code}
-        
-        ⏰ Код действителен в течение 10 минут
-        
-        Введи этот код на сайте itired для завершения регистрации и погрузись в мир музыки!
-        
-        🔒 Безопасность: Никогда не сообщай этот код третьим лицам.
-        
-        Если ты не регистрировался на itired, проигнорируй это письмо.
-        
-        --
-        itired · Твоя музыкальная вселенная
-        🎶 Служба поддержки: support@itired.com
-        📧 Письмо отправлено автоматически
-        
-        © 2024 itired
-        """
-        
-        part1 = MIMEText(text, 'plain', 'utf-8')
-        part2 = MIMEText(html, 'html', 'utf-8')
-        
-        msg.attach(part1)
-        msg.attach(part2)
-        
         server = smtplib.SMTP(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port'])
         server.starttls()
         server.login(EMAIL_CONFIG['email'], EMAIL_CONFIG['password'])
         server.send_message(msg)
         server.quit()
         
-        logger.info(f"Красивое письмо отправлено на {email}")
+        logger.info(f"Письмо отправлено на {email}")
         return True
         
     except Exception as e:
-        logger.error(f"Ошибка отправки красивого письма на {email}: {e}")
-        # Fallback на простое текстовое письмо
-        return send_simple_verification_email(email, verification_code)
-
-def send_simple_verification_email(email, verification_code):
-    """Простая текстовая версия на случай ошибки"""
-    try:
-        msg = MIMEMultipart()
-        msg['From'] = EMAIL_CONFIG['email']
-        msg['To'] = email
-        msg['Subject'] = 'Код подтверждения для itired'
-        
-        text = f"""
-        Ваш код подтверждения: {verification_code}
-        Код действителен в течение 10 минут.
-        
-        Введите этот код на сайте itired для завершения регистрации.
-        
-        Если вы не регистрировались, проигнорируйте это письмо.
-        """
-        
-        msg.attach(MIMEText(text, 'plain'))
-        
-        server = smtplib.SMTP(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port'])
-        server.starttls()
-        server.login(EMAIL_CONFIG['email'], EMAIL_CONFIG['password'])
-        server.send_message(msg)
-        server.quit()
-        
-        logger.info(f"Простое письмо отправлено на {email}")
-        return True
-        
-    except Exception as e:
-        logger.error(f"Ошибка отправки простого письма на {email}: {e}")
+        logger.error(f"Ошибка отправки письма: {e}")
         return False
+
 def is_valid_image(file_data):
-    """Проверяет, является ли файл валидным изображением"""
     try:
         image = Image.open(BytesIO(file_data))
         image.verify()
@@ -508,100 +229,34 @@ def is_valid_image(file_data):
         logger.warning(f"Invalid image file: {e}")
         return False
 
-def get_image_format(file_data):
-    """Определяет формат изображения"""
-    try:
-        image = Image.open(BytesIO(file_data))
-        return image.format
-    except Exception as e:
-        logger.warning(f"Cannot determine image format: {e}")
-        return None
-
 def save_uploaded_file(file_data, filename):
-    """Сохранение загруженного файла аватарки"""
     try:
         if not is_valid_image(file_data):
-            logger.warning("Invalid image file uploaded")
             return None
         
-        image_format = get_image_format(file_data)
-        if not image_format:
-            logger.warning("Cannot determine image format")
-            return None
-        
-        supported_formats = ['JPEG', 'PNG', 'GIF', 'BMP', 'WEBP', 'JPG']
-        if image_format.upper() not in supported_formats:
-            logger.warning(f"Unsupported image format: {image_format}")
-            return None
-        
-        # Конвертируем формат для расширения файла
-        format_map = {
-            'JPEG': 'jpg',
-            'JPG': 'jpg',
-            'PNG': 'png',
-            'GIF': 'gif',
-            'BMP': 'bmp',
-            'WEBP': 'webp'
-        }
-        
-        ext = format_map.get(image_format.upper(), 'jpg')
-        unique_filename = f"{uuid.uuid4().hex}.{ext}"
-        filepath = os.path.join(UPLOAD_FOLDER, unique_filename)
-        
-        # Сохраняем изображение с оптимизацией
         image = Image.open(BytesIO(file_data))
         
-        # Конвертируем в RGB если нужно
         if image.mode in ('RGBA', 'LA'):
-            background = Image.new('RGB', image.size, (45, 45, 45))  # Темный фон
+            background = Image.new('RGB', image.size, (45, 45, 45))
             background.paste(image, mask=image.split()[-1])
             image = background
         elif image.mode != 'RGB':
             image = image.convert('RGB')
         
-        # Оптимизируем размер
         max_size = (400, 400)
         image.thumbnail(max_size, Image.Resampling.LANCZOS)
         
-        # Сохраняем с оптимизацией качества
-        quality = 85
-        if ext == 'png':
-            image.save(filepath, 'PNG', optimize=True)
-        else:
-            image.save(filepath, 'JPEG', quality=quality, optimize=True)
+        unique_filename = f"{uuid.uuid4().hex}.jpg"
+        filepath = os.path.join(UPLOAD_FOLDER, unique_filename)
+        
+        image.save(filepath, 'JPEG', quality=85, optimize=True)
         
         return f"/static/uploads/avatars/{unique_filename}"
         
     except Exception as e:
         logger.error(f"Error saving uploaded file: {e}")
         return None
-def save_uploaded_file(file_data, filename):
-    """Сохранение загруженного файла аватарки"""
-    try:
-        if not is_valid_image(file_data):
-            return None
-        
-        image_format = get_image_format(file_data)
-        if not image_format:
-            return None
-        
-        supported_formats = ['jpeg', 'png', 'gif', 'bmp', 'webp']
-        if image_format not in supported_formats:
-            return None
-        
-        ext = 'jpg' if image_format == 'jpeg' else image_format
-        unique_filename = f"{uuid.uuid4().hex}.{ext}"
-        filepath = os.path.join(UPLOAD_FOLDER, unique_filename)
-        
-        with open(filepath, 'wb') as f:
-            f.write(file_data)
-        
-        return f"/static/uploads/avatars/{unique_filename}"
-    except Exception as e:
-        logger.error(f"Error saving file: {e}")
-        return None
 
-# Инициализация БД
 init_db()
 
 @app.route('/')
@@ -632,7 +287,6 @@ def register():
         db = get_db()
         cursor = db.cursor()
         
-        # Проверка существующего пользователя только при первой регистрации
         if not verification_code:
             cursor.execute('SELECT id FROM users WHERE username = ? OR email = ?', (username, email))
             existing_user = cursor.fetchone()
@@ -730,6 +384,7 @@ def profile():
             display_name = data.get('display_name', '').strip()
             bio = data.get('bio', '').strip()
             yandex_token = data.get('yandex_token', '').strip()
+            vk_token = data.get('vk_token', '').strip()
             avatar_url = data.get('avatar_url', '').strip()
             avatar_file = data.get('avatar_file', '')
             
@@ -748,7 +403,7 @@ def profile():
                 update_fields.append('bio = ?')
                 update_values.append(bio)
             
-            final_avatar_url = user[6] if user[6] else ''
+            final_avatar_url = user[7] if user[7] else ''
             if avatar_file and avatar_file.startswith('data:image/'):
                 try:
                     header, encoded = avatar_file.split(',', 1)
@@ -770,6 +425,10 @@ def profile():
             if yandex_token:
                 update_fields.append('yandex_token = ?')
                 update_values.append(yandex_token)
+            
+            if vk_token:
+                update_fields.append('vk_token = ?')
+                update_values.append(vk_token)
             
             if update_fields:
                 update_values.append(user[0])
@@ -793,8 +452,11 @@ def get_profile_api():
     try:
         user = get_current_user()
         client = get_yandex_client(user[0])
+        vk_client = get_vk_client(user[0])
         
         yandex_profile = None
+        vk_profile = None
+        
         if client:
             try:
                 account = client.account_status()
@@ -808,17 +470,31 @@ def get_profile_api():
             except Exception as e:
                 logger.warning(f"Yandex profile error: {e}")
         
+        if vk_client:
+            try:
+                vk_user = vk_client.users.get()[0]
+                vk_profile = {
+                    'first_name': vk_user['first_name'],
+                    'last_name': vk_user['last_name'],
+                    'full_name': f"{vk_user['first_name']} {vk_user['last_name']}",
+                    'uid': vk_user['id']
+                }
+            except Exception as e:
+                logger.warning(f"VK profile error: {e}")
+        
         return jsonify({
             'local': {
                 'username': user[1],
                 'display_name': user[2] or user[1],
                 'email': user[3],
-                'bio': user[7],
-                'avatar_url': user[6],
+                'bio': user[8],
+                'avatar_url': user[7],
                 'yandex_token_set': bool(user[5]),
-                'created_at': user[11]
+                'vk_token_set': bool(user[6]),
+                'created_at': user[12]
             },
-            'yandex': yandex_profile
+            'yandex': yandex_profile,
+            'vk': vk_profile
         })
     except Exception as e:
         logger.error(f"Profile API error: {e}")
@@ -846,40 +522,98 @@ def check_yandex_token():
     except Exception as e:
         return jsonify({'valid': False, 'message': f'Ошибка подключения: {str(e)}'})
 
+@app.route('/api/check_vk_token')
+@login_required
+def check_vk_token():
+    try:
+        user = get_current_user()
+        if not user or not user[6]:
+            return jsonify({'valid': False, 'message': 'Токен не настроен'})
+        
+        vk_client = get_vk_client(user[0])
+        if not vk_client:
+            return jsonify({'valid': False, 'message': 'Ошибка инициализации VK клиента'})
+        
+        vk_user = vk_client.users.get()[0]
+        return jsonify({
+            'valid': True,
+            'message': 'Подключено к VK Музыке',
+            'account': {
+                'name': f"{vk_user['first_name']} {vk_user['last_name']}",
+                'uid': vk_user['id']
+            }
+        })
+    except Exception as e:
+        return jsonify({'valid': False, 'message': f'Ошибка подключения: {str(e)}'})
+
 @app.route('/api/save_token', methods=['POST'])
 @login_required
 def save_token():
     try:
         data = request.get_json()
         token = data.get('token', '').strip()
+        service = data.get('service', 'yandex')
         
         if not token:
             return jsonify({'success': False, 'message': 'Токен не может быть пустым'})
         
-        try:
-            client = Client(token).init()
-            account = client.account_status()
-        except Exception as e:
-            return jsonify({'success': False, 'message': f'Неверный токен: {str(e)}'})
-        
         user = get_current_user()
         db = get_db()
         cursor = db.cursor()
-        cursor.execute(
-            'UPDATE users SET yandex_token = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-            (token, user[0])
-        )
-        db.commit()
         
-        return jsonify({
-            'success': True, 
-            'message': 'Токен успешно сохранен и проверен',
-            'account': {
-                'login': account.account.login,
-                'name': f"{getattr(account.account, 'first_name', '')} {getattr(account.account, 'last_name', '')}".strip(),
-                'premium': getattr(account.account, 'premium', False)
-            }
-        })
+        if service == 'yandex':
+            try:
+                client = Client(token).init()
+                account = client.account_status()
+            except Exception as e:
+                return jsonify({'success': False, 'message': f'Неверный токен: {str(e)}'})
+            
+            cursor.execute(
+                'UPDATE users SET yandex_token = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                (token, user[0])
+            )
+            db.commit()
+            
+            return jsonify({
+                'success': True, 
+                'message': 'Токен успешно сохранен и проверен',
+                'account': {
+                    'login': account.account.login,
+                    'name': f"{getattr(account.account, 'first_name', '')} {getattr(account.account, 'last_name', '')}".strip(),
+                    'premium': getattr(account.account, 'premium', False)
+                }
+            })
+        
+        elif service == 'vk':
+            try:
+                # Извлекаем токен из строки
+                if 'access_token=' in token:
+                    match = re.search(r'access_token=([^&]+)', token)
+                    if match:
+                        token = match.group(1)
+                
+                vk_session = vk_api.VkApi(token=token)
+                vk_client = vk_session.get_api()
+                vk_user = vk_client.users.get()[0]
+            except Exception as e:
+                return jsonify({'success': False, 'message': f'Неверный токен: {str(e)}'})
+            
+            cursor.execute(
+                'UPDATE users SET vk_token = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                (token, user[0])
+            )
+            db.commit()
+            
+            return jsonify({
+                'success': True, 
+                'message': 'Токен успешно сохранен и проверен',
+                'account': {
+                    'name': f"{vk_user['first_name']} {vk_user['last_name']}",
+                    'uid': vk_user['id']
+                }
+            })
+        
+        return jsonify({'success': False, 'message': 'Неизвестный сервис'})
         
     except Exception as e:
         return jsonify({'success': False, 'message': f'Ошибка сохранения: {str(e)}'})
@@ -889,55 +623,87 @@ def save_token():
 def get_recommendations():
     try:
         user = get_current_user()
-        client = get_yandex_client(user[0])
-        if not client:
-            return jsonify({'error': 'Токен Яндекс.Музыки не настроен'}), 400
+        service = get_current_music_service(user[0])
         
         result = []
         
-        # Попробуем получить чарты
-        try:
-            chart = client.chart('world')
-            if chart and hasattr(chart, 'chart') and chart.chart.tracks:
-                for track in chart.chart.tracks[:6]:
-                    cover_uri = None
-                    if hasattr(track, 'cover_uri') and track.cover_uri:
-                        cover_uri = f"https://{track.cover_uri.replace('%%', '300x300')}"
-                    
-                    result.append({
-                        'id': track.id,
-                        'title': track.title,
-                        'type': 'track',
-                        'artists': [artist.name for artist in track.artists],
-                        'cover_uri': cover_uri,
-                        'album': track.albums[0].title if track.albums else 'Unknown'
-                    })
-        except Exception as e:
-            logger.warning(f"Chart error: {e}")
+        if service == 'yandex':
+            client = get_yandex_client(user[0])
+            if not client:
+                return jsonify({'error': 'Токен Яндекс.Музыки не настроен'}), 400
+            
+            try:
+                # Новые релизы с проверкой атрибутов
+                new_releases = client.new_releases()
+                if new_releases and hasattr(new_releases, 'new_releases'):
+                    for album in new_releases.new_releases[:3]:
+                        cover_uri = None
+                        if hasattr(album, 'cover_uri') and album.cover_uri:
+                            cover_uri = f"https://{album.cover_uri.replace('%%', '300x300')}"
+                        
+                        album_id = getattr(album, 'id', 'unknown')
+                        album_title = getattr(album, 'title', 'Unknown Album')
+                        artists = [artist.name for artist in album.artists] if hasattr(album, 'artists') else []
+                        
+                        result.append({
+                            'id': f"yandex_{album_id}",
+                            'title': album_title,
+                            'type': 'album',
+                            'artists': artists,
+                            'cover_uri': cover_uri,
+                            'year': getattr(album, 'year', ''),
+                            'service': 'yandex'
+                        })
+            except Exception as e:
+                logger.warning(f"New releases error: {e}")
+            
+            try:
+                # Чарты с проверкой атрибутов
+                chart = client.chart('world')
+                if chart and hasattr(chart, 'chart') and chart.chart.tracks:
+                    for track in chart.chart.tracks[:3]:
+                        cover_uri = None
+                        if hasattr(track, 'cover_uri') and track.cover_uri:
+                            cover_uri = f"https://{track.cover_uri.replace('%%', '300x300')}"
+                        
+                        track_id = getattr(track, 'id', 'unknown')
+                        track_title = getattr(track, 'title', 'Unknown Track')
+                        artists = [artist.name for artist in track.artists] if hasattr(track, 'artists') else []
+                        album_title = track.albums[0].title if track.albums else 'Unknown Album'
+                        
+                        result.append({
+                            'id': f"yandex_{track_id}",
+                            'title': track_title,
+                            'type': 'track',
+                            'artists': artists,
+                            'cover_uri': cover_uri,
+                            'album': album_title,
+                            'service': 'yandex'
+                        })
+            except Exception as e:
+                logger.warning(f"Chart error: {e}")
         
-        # Попробуем получить плейлисты дня
-        try:
-            landing = client.landing()
-            if landing and hasattr(landing, 'blocks'):
-                for block in landing.blocks:
-                    if hasattr(block, 'entities') and block.id == 'personal-playlists':
-                        for entity in block.entities[:6-len(result)]:
-                            if hasattr(entity, 'data'):
-                                playlist = entity.data
-                                cover_uri = None
-                                if hasattr(playlist, 'cover_uri') and playlist.cover_uri:
-                                    cover_uri = f"https://{playlist.cover_uri.replace('%%', '400x400')}"
-                                
-                                result.append({
-                                    'id': getattr(playlist, 'kind', ''),
-                                    'title': getattr(playlist, 'title', ''),
-                                    'type': 'playlist',
-                                    'track_count': getattr(playlist, 'track_count', 0),
-                                    'cover_uri': cover_uri,
-                                    'description': getattr(playlist, 'description', '') or ''
-                                })
-        except Exception as e:
-            logger.warning(f"Landing error: {e}")
+        elif service == 'vk':
+            vk_client = get_vk_client(user[0])
+            if not vk_client:
+                return jsonify({'error': 'Токен VK не настроен'}), 400
+            
+            try:
+                # Получаем рекомендации VK
+                recommendations = vk_client.audio.getRecommendations(count=6)
+                if 'items' in recommendations:
+                    for track in recommendations['items']:
+                        result.append({
+                            'id': f"vk_{track['id']}",
+                            'title': track['title'],
+                            'type': 'track',
+                            'artists': [track['artist']],
+                            'cover_uri': track.get('album', {}).get('thumb', {}).get('photo_300') if track.get('album') else None,
+                            'duration': track['duration'] * 1000,
+                            'service': 'vk'
+                        })
+            except Exception as e:
+                logger.warning(f"VK recommendations error: {e}")
         
         return jsonify(result[:6])
     except Exception as e:
@@ -949,87 +715,159 @@ def get_recommendations():
 def get_playlists():
     try:
         user = get_current_user()
-        client = get_yandex_client(user[0])
-        if not client:
-            return jsonify({'error': 'Токен Яндекс.Музыки не настроен'}), 400
+        service = get_current_music_service(user[0])
         
-        playlists = client.users_playlists_list()
         result = []
         
-        for playlist in playlists:
-            cover_uri = None
-            if hasattr(playlist, 'cover_uri') and playlist.cover_uri:
-                cover_uri = f"https://{playlist.cover_uri.replace('%%', '400x400')}"
+        if service == 'yandex':
+            client = get_yandex_client(user[0])
+            if not client:
+                return jsonify({'error': 'Токен Яндекс.Музыки не настроен'}), 400
             
-            modified_date = None
-            if hasattr(playlist, 'modified') and playlist.modified:
-                if hasattr(playlist.modified, 'isoformat'):
-                    modified_date = playlist.modified.isoformat()
-                else:
-                    modified_date = str(playlist.modified)
+            playlists = client.users_playlists_list()
             
-            result.append({
-                'id': playlist.kind,
-                'title': playlist.title,
-                'track_count': playlist.track_count,
-                'cover_uri': cover_uri,
-                'modified': modified_date,
-                'description': getattr(playlist, 'description', '') or '',
-                'owner': getattr(playlist, 'owner', {}).get('login', '') if hasattr(playlist, 'owner') else ''
-            })
+            for playlist in playlists:
+                cover_uri = None
+                if hasattr(playlist, 'cover') and playlist.cover:
+                    if hasattr(playlist.cover, 'uri') and playlist.cover.uri:
+                        cover_uri = f"https://{playlist.cover.uri.replace('%%', '400x400')}"
+                
+                modified_date = None
+                if hasattr(playlist, 'modified') and playlist.modified:
+                    if hasattr(playlist.modified, 'isoformat'):
+                        modified_date = playlist.modified.isoformat()
+                    else:
+                        modified_date = str(playlist.modified)
+                
+                result.append({
+                    'id': f"yandex_{playlist.kind}",
+                    'title': playlist.title,
+                    'track_count': playlist.track_count,
+                    'cover_uri': cover_uri,
+                    'modified': modified_date,
+                    'description': getattr(playlist, 'description', '') or '',
+                    'owner': getattr(playlist.owner, 'login', '') if hasattr(playlist, 'owner') else '',
+                    'service': 'yandex'
+                })
+        
+        elif service == 'vk':
+            vk_client = get_vk_client(user[0])
+            if not vk_client:
+                return jsonify({'error': 'Токен VK не настроен'}), 400
+            
+            try:
+                # Получаем плейлисты VK
+                playlists = vk_client.audio.getPlaylists()
+                if 'items' in playlists:
+                    for playlist in playlists['items']:
+                        result.append({
+                            'id': f"vk_{playlist['id']}",
+                            'title': playlist['title'],
+                            'track_count': playlist['count'],
+                            'cover_uri': playlist['photo']['photo_300'] if playlist.get('photo') else None,
+                            'modified': playlist['update_time'],
+                            'description': playlist.get('description', ''),
+                            'owner': f"id{playlist['owner_id']}",
+                            'service': 'vk'
+                        })
+            except Exception as e:
+                logger.warning(f"VK playlists error: {e}")
         
         return jsonify(result)
     except Exception as e:
         logger.error(f"Playlists error: {e}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/playlist/<int:playlist_id>')
+@app.route('/api/playlist/<service>_<int:playlist_id>')
 @login_required
-def get_playlist(playlist_id):
+def get_playlist(service, playlist_id):
     try:
         user = get_current_user()
-        client = get_yandex_client(user[0])
-        if not client:
-            return jsonify({'error': 'Токен Яндекс.Музыки не настроен'}), 400
         
-        playlist = client.users_playlists(playlist_id)
-        if not playlist:
-            return jsonify({'error': 'Плейлист не найден'}), 404
+        if service == 'yandex':
+            client = get_yandex_client(user[0])
+            if not client:
+                return jsonify({'error': 'Токен Яндекс.Музыки не настроен'}), 400
+            
+            playlist = client.users_playlists(playlist_id)
+            if not playlist:
+                return jsonify({'error': 'Плейлист не найден'}), 404            
+            tracks = []
+            for track_short in playlist.tracks:
+                try:
+                    track = track_short.track
+                    cover_uri = None
+                    if hasattr(track, 'cover_uri') and track.cover_uri:
+                        cover_uri = f"https://{track.cover_uri.replace('%%', '300x300')}"
+                    
+                    tracks.append({
+                        'id': f"yandex_{track.id}",
+                        'title': track.title,
+                        'artists': [artist.name for artist in track.artists],
+                        'album': track.albums[0].title if track.albums else 'Unknown Album',
+                        'duration': track.duration_ms,
+                        'cover_uri': cover_uri,
+                        'year': track.albums[0].year if track.albums and track.albums[0].year else 'Unknown',
+                        'service': 'yandex'
+                    })
+                except Exception as e:
+                    logger.warning(f"Error processing track: {e}")
+                    continue
+            
+            cover_uri = None
+            if hasattr(playlist, 'cover_uri') and playlist.cover_uri:
+                cover_uri = f"https://{playlist.cover_uri.replace('%%', '400x400')}"
+            
+            return jsonify({
+                'id': f"yandex_{playlist.kind}",
+                'title': playlist.title,
+                'track_count': playlist.track_count,
+                'cover_uri': cover_uri,
+                'description': getattr(playlist, 'description', '') or '',
+                'owner': getattr(playlist, 'owner', {}).get('login', '') if hasattr(playlist, 'owner') else '',
+                'tracks': tracks,
+                'service': 'yandex'
+            })
         
-        tracks = []
-        for track_short in playlist.tracks:
+        elif service == 'vk':
+            vk_client = get_vk_client(user[0])
+            if not vk_client:
+                return jsonify({'error': 'Токен VK не настроен'}), 400
+            
             try:
-                track = track_short.track
-                cover_uri = None
-                if hasattr(track, 'cover_uri') and track.cover_uri:
-                    cover_uri = f"https://{track.cover_uri.replace('%%', '300x300')}"
+                playlist = vk_client.audio.getPlaylistById(playlist_id=playlist_id)
+                tracks = vk_client.audio.get(playlist_id=playlist_id)
                 
-                tracks.append({
-                    'id': track.id,
-                    'title': track.title,
-                    'artists': [artist.name for artist in track.artists],
-                    'album': track.albums[0].title if track.albums else 'Unknown Album',
-                    'duration': track.duration_ms,
-                    'cover_uri': cover_uri,
-                    'year': track.albums[0].year if track.albums and track.albums[0].year else 'Unknown'
+                track_list = []
+                if 'items' in tracks:
+                    for track in tracks['items']:
+                        track_list.append({
+                            'id': f"vk_{track['id']}",
+                            'title': track['title'],
+                            'artists': [track['artist']],
+                            'album': track.get('album', {}).get('title', 'Unknown Album'),
+                            'duration': track['duration'] * 1000,
+                            'cover_uri': track.get('album', {}).get('thumb', {}).get('photo_300') if track.get('album') else None,
+                            'year': track.get('year', 'Unknown'),
+                            'service': 'vk'
+                        })
+                
+                return jsonify({
+                    'id': f"vk_{playlist['id']}",
+                    'title': playlist['title'],
+                    'track_count': playlist['count'],
+                    'cover_uri': playlist['photo']['photo_300'] if playlist.get('photo') else None,
+                    'description': playlist.get('description', ''),
+                    'owner': f"id{playlist['owner_id']}",
+                    'tracks': track_list,
+                    'service': 'vk'
                 })
             except Exception as e:
-                logger.warning(f"Error processing track: {e}")
-                continue
+                logger.error(f"VK playlist error: {e}")
+                return jsonify({'error': str(e)}), 500
         
-        cover_uri = None
-        if hasattr(playlist, 'cover_uri') and playlist.cover_uri:
-            cover_uri = f"https://{playlist.cover_uri.replace('%%', '400x400')}"
+        return jsonify({'error': 'Неизвестный сервис'}), 400
         
-        return jsonify({
-            'id': playlist.kind,
-            'title': playlist.title,
-            'track_count': playlist.track_count,
-            'cover_uri': cover_uri,
-            'description': getattr(playlist, 'description', '') or '',
-            'owner': getattr(playlist, 'owner', {}).get('login', '') if hasattr(playlist, 'owner') else '',
-            'tracks': tracks
-        })
     except Exception as e:
         logger.error(f"Playlist error: {e}")
         return jsonify({'error': str(e)}), 500
@@ -1039,31 +877,60 @@ def get_playlist(playlist_id):
 def get_liked_tracks():
     try:
         user = get_current_user()
-        client = get_yandex_client(user[0])
-        if not client:
-            return jsonify({'error': 'Токен Яндекс.Музыки не настроен'}), 400
+        service = get_current_music_service(user[0])
         
-        liked_tracks = client.users_likes_tracks()
         tracks = []
         
-        for track_short in liked_tracks[:100]:
+        if service == 'yandex':
+            client = get_yandex_client(user[0])
+            if not client:
+                return jsonify({'error': 'Токен Яндекс.Музыки не настроен'}), 400
+            
+            liked_tracks = client.users_likes_tracks()
+            
+            for track_short in liked_tracks[:100]:
+                try:
+                    track = track_short.fetch_track()
+                    cover_uri = None
+                    if hasattr(track, 'cover_uri') and track.cover_uri:
+                        cover_uri = f"https://{track.cover_uri.replace('%%', '300x300')}"
+                    
+                    tracks.append({
+                        'id': f"yandex_{track.id}",
+                        'title': track.title,
+                        'artists': [artist.name for artist in track.artists],
+                        'album': track.albums[0].title if track.albums else 'Unknown Album',
+                        'duration': track.duration_ms,
+                        'cover_uri': cover_uri,
+                        'year': track.albums[0].year if track.albums and track.albums[0].year else 'Unknown',
+                        'service': 'yandex'
+                    })
+                except Exception as e:
+                    continue
+        
+        elif service == 'vk':
+            vk_client = get_vk_client(user[0])
+            if not vk_client:
+                return jsonify({'error': 'Токен VK не настроен'}), 400
+            
             try:
-                track = track_short.fetch_track()
-                cover_uri = None
-                if hasattr(track, 'cover_uri') and track.cover_uri:
-                    cover_uri = f"https://{track.cover_uri.replace('%%', '300x300')}"
-                
-                tracks.append({
-                    'id': track.id,
-                    'title': track.title,
-                    'artists': [artist.name for artist in track.artists],
-                    'album': track.albums[0].title if track.albums else 'Unknown Album',
-                    'duration': track.duration_ms,
-                    'cover_uri': cover_uri,
-                    'year': track.albums[0].year if track.albums and track.albums[0].year else 'Unknown'
-                })
+                # Получаем лайкнутые треки VK
+                liked_tracks = vk_client.audio.get(count=100)
+                if 'items' in liked_tracks:
+                    for track in liked_tracks['items']:
+                        tracks.append({
+                            'id': f"vk_{track['id']}",
+                            'title': track['title'],
+                            'artists': [track['artist']],
+                            'album': track.get('album', {}).get('title', 'Unknown Album'),
+                            'duration': track['duration'] * 1000,
+                            'cover_uri': track.get('album', {}).get('thumb', {}).get('photo_300') if track.get('album') else None,
+                            'year': track.get('year', 'Unknown'),
+                            'service': 'vk'
+                        })
             except Exception as e:
-                continue
+                logger.error(f"VK liked tracks error: {e}")
+                return jsonify({'error': str(e)}), 500
         
         return jsonify(tracks)
     except Exception as e:
@@ -1075,32 +942,90 @@ def get_liked_tracks():
 def get_stats():
     try:
         user = get_current_user()
-        client = get_yandex_client(user[0])
-        if not client:
-            return jsonify({'error': 'Токен Яндекс.Музыки не настроен'}), 400
+        service = get_current_music_service(user[0])
         
-        playlists = client.users_playlists_list()
-        liked_tracks = client.users_likes_tracks()
+        if service == 'yandex':
+            client = get_yandex_client(user[0])
+            if not client:
+                return jsonify({'error': 'Токен Яндекс.Музыки не настроен'}), 400
+            
+            playlists = client.users_playlists_list()
+            liked_tracks = client.users_likes_tracks()
+            
+            genre_stats = {}
+            artist_stats = {}
+            
+            for track_short in liked_tracks[:50]:
+                try:
+                    track = track_short.fetch_track()
+                    
+                    if track.albums and track.albums[0].genre:
+                        genre = track.albums[0].genre
+                        genre_stats[genre] = genre_stats.get(genre, 0) + 1
+                    
+                    for artist in track.artists:
+                        artist_name = artist.name
+                        artist_stats[artist_name] = artist_stats.get(artist_name, 0) + 1
+                        
+                except:
+                    continue
+            
+            top_artist = max(artist_stats.items(), key=lambda x: x[1], default=('Неизвестно', 0))
+            top_genre = max(genre_stats.items(), key=lambda x: x[1], default=('Неизвестно', 0))
+            
+            stats = {
+                'total_playlists': len(playlists),
+                'total_liked_tracks': len(liked_tracks),
+                'largest_playlist': max([p.track_count for p in playlists], default=0),
+                'total_artists': len(artist_stats),
+                'top_artist': top_artist[0],
+                'top_genre': top_genre[0],
+                'genre_stats': genre_stats,
+                'artist_stats': dict(sorted(artist_stats.items(), key=lambda x: x[1], reverse=True)[:5])
+            }
+            
+            return jsonify(stats)
         
-        genre_stats = {}
-        for track_short in liked_tracks[:50]:
+        elif service == 'vk':
+            vk_client = get_vk_client(user[0])
+            if not vk_client:
+                return jsonify({'error': 'Токен VK не настроен'}), 400
+            
             try:
-                track = track_short.fetch_track()
-                if track.albums and track.albums[0].genre:
-                    genre = track.albums[0].genre
-                    genre_stats[genre] = genre_stats.get(genre, 0) + 1
-            except:
-                continue
+                # Получаем статистику VK
+                liked_tracks = vk_client.audio.get(count=50)
+                playlists = vk_client.audio.getPlaylists()
+                
+                if 'items' not in liked_tracks or 'items' not in playlists:
+                    return jsonify({'error': 'Invalid VK response'}), 500
+                
+                genre_stats = {}
+                artist_stats = {}
+                
+                for track in liked_tracks['items']:
+                    artist = track['artist']
+                    artist_stats[artist] = artist_stats.get(artist, 0) + 1
+                
+                top_artist = max(artist_stats.items(), key=lambda x: x[1], default=('Неизвестно', 0))
+                
+                stats = {
+                    'total_playlists': playlists.get('count', 0),
+                    'total_liked_tracks': liked_tracks.get('count', 0),
+                    'largest_playlist': max([p['count'] for p in playlists['items']], default=0) if playlists['items'] else 0,
+                    'total_artists': len(artist_stats),
+                    'top_artist': top_artist[0],
+                    'top_genre': 'Неизвестно',
+                    'genre_stats': {},
+                    'artist_stats': dict(sorted(artist_stats.items(), key=lambda x: x[1], reverse=True)[:5])
+                }
+                
+                return jsonify(stats)
+            except Exception as e:
+                logger.error(f"VK stats error: {e}")
+                return jsonify({'error': str(e)}), 500
         
-        stats = {
-            'total_playlists': len(playlists),
-            'total_liked_tracks': len(liked_tracks),
-            'largest_playlist': max([p.track_count for p in playlists], default=0),
-            'total_artists': len(set(artist.name for track_short in liked_tracks[:20] for artist in track_short.fetch_track().artists)),
-            'genre_stats': genre_stats
-        }
+        return jsonify({'error': 'Неизвестный сервис'}), 400
         
-        return jsonify(stats)
     except Exception as e:
         logger.error(f"Stats error: {e}")
         return jsonify({'error': str(e)}), 500
@@ -1110,99 +1035,198 @@ def get_stats():
 def search():
     try:
         user = get_current_user()
-        client = get_yandex_client(user[0])
-        if not client:
-            return jsonify({'error': 'Токен Яндекс.Музыки не настроен'}), 400
-        
+        service = get_current_music_service(user[0])
         query = request.args.get('q', '')
+        
         if not query:
             return jsonify({'error': 'Введите запрос'}), 400
         
-        search_result = client.search(query)
         result = {'tracks': [], 'albums': [], 'artists': [], 'playlists': []}
         
-        if search_result.tracks:
-            for track in search_result.tracks.results[:10]:
-                cover_uri = None
-                if hasattr(track, 'cover_uri') and track.cover_uri:
-                    cover_uri = f"https://{track.cover_uri.replace('%%', '300x300')}"
-                
-                result['tracks'].append({
-                    'id': track.id,
-                    'title': track.title,
-                    'artists': [artist.name for artist in track.artists],
-                    'album': track.albums[0].title if track.albums else 'Unknown',
-                    'duration': track.duration_ms,
-                    'cover_uri': cover_uri
-                })
+        if service == 'yandex':
+            client = get_yandex_client(user[0])
+            if not client:
+                return jsonify({'error': 'Токен Яндекс.Музыки не настроен'}), 400
+            
+            search_result = client.search(query)
+            
+            if search_result.tracks:
+                for track in search_result.tracks.results[:10]:
+                    cover_uri = None
+                    if hasattr(track, 'cover_uri') and track.cover_uri:
+                        cover_uri = f"https://{track.cover_uri.replace('%%', '300x300')}"
+                    
+                    result['tracks'].append({
+                        'id': f"yandex_{track.id}",
+                        'title': track.title,
+                        'artists': [artist.name for artist in track.artists],
+                        'album': track.albums[0].title if track.albums else 'Unknown',
+                        'duration': track.duration_ms,
+                        'cover_uri': cover_uri,
+                        'service': 'yandex'
+                    })
+            
+            if search_result.albums:
+                for album in search_result.albums.results[:5]:
+                    cover_uri = None
+                    if hasattr(album, 'cover_uri') and album.cover_uri:
+                        cover_uri = f"https://{album.cover_uri.replace('%%', '300x300')}"
+                    
+                    result['albums'].append({
+                        'id': f"yandex_{album.id}",
+                        'title': album.title,
+                        'artists': [artist.name for artist in album.artists],
+                        'year': album.year,
+                        'track_count': album.track_count,
+                        'cover_uri': cover_uri,
+                        'service': 'yandex'
+                    })
+            
+            if search_result.artists:
+                for artist in search_result.artists.results[:5]:
+                    result['artists'].append({
+                        'id': f"yandex_{artist.id}",
+                        'name': artist.name,
+                        'genres': artist.genres or [],
+                        'service': 'yandex'
+                    })
+            
+            if search_result.playlists:
+                for playlist in search_result.playlists.results[:5]:
+                    cover_uri = None
+                    if hasattr(playlist, 'cover_uri') and playlist.cover_uri:
+                        cover_uri = f"https://{playlist.cover_uri.replace('%%', '300x300')}"
+                    
+                    result['playlists'].append({
+                        'id': f"yandex_{playlist.kind}",
+                        'title': playlist.title,
+                        'track_count': playlist.track_count,
+                        'cover_uri': cover_uri,
+                        'description': getattr(playlist, 'description', '') or '',
+                        'service': 'yandex'
+                    })
         
-        if search_result.albums:
-            for album in search_result.albums.results[:5]:
-                cover_uri = None
-                if hasattr(album, 'cover_uri') and album.cover_uri:
-                    cover_uri = f"https://{album.cover_uri.replace('%%', '300x300')}"
+        elif service == 'vk':
+            vk_client = get_vk_client(user[0])
+            if not vk_client:
+                return jsonify({'error': 'Токен VK не настроен'}), 400
+            
+            try:
+                # Поиск в VK
+                search_result = vk_client.audio.search(q=query, count=10)
                 
-                result['albums'].append({
-                    'id': album.id,
-                    'title': album.title,
-                    'artists': [artist.name for artist in album.artists],
-                    'year': album.year,
-                    'track_count': album.track_count,
-                    'cover_uri': cover_uri
-                })
-        
-        if search_result.artists:
-            for artist in search_result.artists.results[:5]:
-                result['artists'].append({
-                    'id': artist.id,
-                    'name': artist.name,
-                    'genres': artist.genres or []
-                })
-        
-        if search_result.playlists:
-            for playlist in search_result.playlists.results[:5]:
-                cover_uri = None
-                if hasattr(playlist, 'cover_uri') and playlist.cover_uri:
-                    cover_uri = f"https://{playlist.cover_uri.replace('%%', '300x300')}"
+                if 'items' in search_result:
+                    for track in search_result['items']:
+                        result['tracks'].append({
+                            'id': f"vk_{track['id']}",
+                            'title': track['title'],
+                            'artists': [track['artist']],
+                            'album': track.get('album', {}).get('title', 'Unknown'),
+                            'duration': track['duration'] * 1000,
+                            'cover_uri': track.get('album', {}).get('thumb', {}).get('photo_300') if track.get('album') else None,
+                            'service': 'vk'
+                        })
                 
-                result['playlists'].append({
-                    'id': playlist.kind,
-                    'title': playlist.title,
-                    'track_count': playlist.track_count,
-                    'cover_uri': cover_uri,
-                    'description': getattr(playlist, 'description', '') or ''
-                })
+            except Exception as e:
+                logger.error(f"VK search error: {e}")
         
         return jsonify(result)
     except Exception as e:
         logger.error(f"Search error: {e}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/play_track/<track_id>')
+@app.route('/api/play_track/<service>_<track_id>')
 @login_required
-def get_track_url(track_id):
+def get_track_url(service, track_id):
     try:
         user = get_current_user()
-        client = get_yandex_client(user[0])
-        if not client:
-            return jsonify({'error': 'Токен Яндекс.Музыки не настроен'}), 400
         
-        track = client.tracks(track_id)[0]
-        download_info = track.get_download_info()
-        
-        if download_info:
-            best_quality = max(download_info, key=lambda x: x.bitrate_in_kbps)
-            download_url = best_quality.get_direct_link()
+        if service == 'yandex':
+            client = get_yandex_client(user[0])
+            if not client:
+                return jsonify({'error': 'Токен Яндекс.Музыки не настроен'}), 400
             
-            return jsonify({
-                'url': download_url,
-                'title': track.title,
-                'artists': [artist.name for artist in track.artists],
-                'duration': track.duration_ms,
-                'cover_uri': f"https://{track.cover_uri.replace('%%', '300x300')}" if track.cover_uri else None
-            })
+            track = client.tracks(track_id)[0]
+            download_info = track.get_download_info()
+            
+            if download_info:
+                best_quality = max(download_info, key=lambda x: x.bitrate_in_kbps)
+                download_url = best_quality.get_direct_link()
+                
+                db = get_db()
+                cursor = db.cursor()
+                activity_data = json.dumps({
+                    'track': track.title,
+                    'artist': ', '.join([artist.name for artist in track.artists]),
+                    'track_id': f"yandex_{track_id}",
+                    'service': 'yandex'
+                })
+                cursor.execute(
+                    'INSERT INTO user_activity (user_id, activity_type, activity_data) VALUES (?, ?, ?)',
+                    (user[0], 'listen', activity_data)
+                )
+                db.commit()
+                
+                track_data = {
+                    'title': track.title,
+                    'artists': [artist.name for artist in track.artists],
+                    'duration': track.duration_ms,
+                    'cover_uri': f"https://{track.cover_uri.replace('%%', '300x300')}" if track.cover_uri else None
+                }
+                
+                return jsonify({
+                    'url': download_url,
+                    'title': track.title,
+                    'artists': [artist.name for artist in track.artists],
+                    'duration': track.duration_ms,
+                    'cover_uri': track_data['cover_uri'],
+                    'service': 'yandex'
+                })
+            
+            return jsonify({'error': 'Не удалось получить ссылку на трек'}), 404
         
-        return jsonify({'error': 'Не удалось получить ссылку на трек'}), 404
+        elif service == 'vk':
+            vk_client = get_vk_client(user[0])
+            if not vk_client:
+                return jsonify({'error': 'Токен VK не настроен'}), 400
+            
+            try:
+                # Получаем информацию о треке
+                track_info = vk_client.audio.getById(audios=track_id)
+                if not track_info or 'url' not in track_info[0]:
+                    return jsonify({'error': 'Не удалось получить информацию о треке'}), 404
+                
+                track_data = track_info[0]
+                
+                db = get_db()
+                cursor = db.cursor()
+                activity_data = json.dumps({
+                    'track': track_data['title'],
+                    'artist': track_data['artist'],
+                    'track_id': f"vk_{track_id}",
+                    'service': 'vk'
+                })
+                cursor.execute(
+                    'INSERT INTO user_activity (user_id, activity_type, activity_data) VALUES (?, ?, ?)',
+                    (user[0], 'listen', activity_data)
+                )
+                db.commit()
+                
+                return jsonify({
+                    'url': track_data['url'],
+                    'title': track_data['title'],
+                    'artists': [track_data['artist']],
+                    'duration': track_data['duration'] * 1000,
+                    'cover_uri': track_data.get('album', {}).get('thumb', {}).get('photo_300') if track_data.get('album') else None,
+                    'service': 'vk'
+                })
+                
+            except Exception as e:
+                logger.error(f"VK track error: {e}")
+                return jsonify({'error': str(e)}), 500
+        
+        return jsonify({'error': 'Неизвестный сервис'}), 400
+        
     except Exception as e:
         logger.error(f"Track URL error: {e}")
         return jsonify({'error': str(e)}), 500
@@ -1223,7 +1247,8 @@ def user_settings():
                 'theme': settings[1],
                 'language': settings[2],
                 'auto_play': bool(settings[3]),
-                'show_explicit': bool(settings[4])
+                'show_explicit': bool(settings[4]),
+                'music_service': settings[5]
             })
         return jsonify({})
     
@@ -1232,14 +1257,15 @@ def user_settings():
         
         cursor.execute('''
             INSERT OR REPLACE INTO user_settings 
-            (user_id, theme, language, auto_play, show_explicit)
-            VALUES (?, ?, ?, ?, ?)
+            (user_id, theme, language, auto_play, show_explicit, music_service)
+            VALUES (?, ?, ?, ?, ?, ?)
         ''', (
             user[0],
             data.get('theme', 'dark'),
             data.get('language', 'ru'),
             data.get('auto_play', True),
-            data.get('show_explicit', True)
+            data.get('show_explicit', True),
+            data.get('music_service', 'yandex')
         ))
         db.commit()
         
@@ -1284,7 +1310,7 @@ def resend_verification():
             
     except Exception as e:
         return jsonify({'success': False, 'message': f'Ошибка: {str(e)}'})
-    
+
 @app.route('/api/friends')
 @login_required
 def get_friends():
@@ -1308,13 +1334,6 @@ def get_friends():
         
         friends = []
         for row in cursor.fetchall():
-            # Добавляем mock-активность для демонстрации
-            current_activity = {
-                'track': 'Bohemian Rhapsody',
-                'artist': 'Queen',
-                'timestamp': datetime.now().isoformat()
-            } if random.random() > 0.5 else None
-            
             friends.append({
                 'id': row[0],
                 'username': row[1],
@@ -1323,10 +1342,7 @@ def get_friends():
                 'status': row[4],
                 'taste_match': row[5],
                 'created_at': row[6],
-                'direction': row[7],
-                'current_activity': current_activity,
-                'top_genres': ['Rock', 'Pop', 'Classic'],
-                'is_online': random.random() > 0.3
+                'direction': row[7]
             })
         
         return jsonify(friends)
@@ -1341,7 +1357,6 @@ def add_friend(friend_id):
         db = get_db()
         cursor = db.cursor()
         
-        # Проверяем, не добавлен ли уже пользователь
         cursor.execute('''
             SELECT * FROM friends 
             WHERE (user_id = ? AND friend_id = ?) 
@@ -1352,8 +1367,7 @@ def add_friend(friend_id):
         if existing:
             return jsonify({'error': 'Уже есть запрос на дружбу'}), 400
         
-        # Считаем совпадение музыкальных вкусов (упрощенно)
-        taste_match = random.randint(50, 95)
+        taste_match = 75
         
         cursor.execute('''
             INSERT INTO friends (user_id, friend_id, taste_match, status)
@@ -1362,7 +1376,6 @@ def add_friend(friend_id):
         
         db.commit()
         
-        # Логируем активность
         cursor.execute('''
             INSERT INTO user_activity (user_id, activity_type, activity_data)
             VALUES (?, 'friend', ?)
@@ -1374,38 +1387,57 @@ def add_friend(friend_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/activity')
+@app.route('/api/user/activity')
 @login_required
-def get_activity():
+def get_user_activity():
     try:
         user = get_current_user()
+        db = get_db()
+        cursor = db.cursor()
         
-        # Mock данные активности для демонстрации
-        activities = [
-            {
-                'type': 'listen',
-                'track': 'Bohemian Rhapsody',
-                'artist': 'Queen',
-                'track_id': 12345,
-                'timestamp': (datetime.now() - timedelta(minutes=5)).isoformat()
-            },
-            {
-                'type': 'like', 
-                'track': 'Hotel California',
-                'artist': 'Eagles',
-                'track_id': 67890,
-                'timestamp': (datetime.now() - timedelta(hours=1)).isoformat()
-            },
-            {
-                'type': 'playlist',
-                'playlist_name': 'Мое настроение',
-                'timestamp': (datetime.now() - timedelta(hours=3)).isoformat()
+        cursor.execute('''
+            SELECT activity_type, activity_data, created_at 
+            FROM user_activity 
+            WHERE user_id = ? 
+            ORDER BY created_at DESC 
+            LIMIT 20
+        ''', (user[0],))
+        
+        activities = []
+        for row in cursor.fetchall():
+            activity_type, activity_data, created_at = row
+            data = json.loads(activity_data) if activity_data else {}
+            
+            activity = {
+                'type': activity_type,
+                'timestamp': created_at.isoformat() if hasattr(created_at, 'isoformat') else str(created_at)
             }
-        ]
+            
+            if activity_type == 'listen':
+                activity.update({
+                    'track': data.get('track', 'Неизвестный трек'),
+                    'artist': data.get('artist', 'Неизвестный артист'),
+                    'track_id': data.get('track_id'),
+                    'service': data.get('service', 'unknown')
+                })
+            elif activity_type == 'friend':
+                activity['friend_id'] = data.get('friend_id')
+            
+            activities.append(activity)
         
         return jsonify(activities)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"User activity error: {e}")
+        return jsonify([])
+
+@app.errorhandler(500)
+def internal_error(error):
+    logger.error(f"Server Error: {error}")
+    return jsonify({'error': 'Internal server error'}), 500
+
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({'error': 'Not found'}), 404
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5001)

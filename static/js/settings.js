@@ -1,4 +1,4 @@
-// settings.js
+
 document.addEventListener('DOMContentLoaded', function() {
     loadSettings();
     setupSettingsListeners();
@@ -48,7 +48,6 @@ function setupSettingsListeners() {
         });
     }
     
-    // Обработчики для мгновенного сохранения
     document.querySelectorAll('#themeSelect, #languageSelect, #autoPlayToggle').forEach(element => {
         element.addEventListener('change', saveSettings);
     });

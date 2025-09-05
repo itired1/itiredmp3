@@ -38,10 +38,6 @@
                     <i class="fas fa-chart-bar"></i>
                     <span>Статистика</span>
                 </a>
-                <a href="/profile" class="nav-item">
-                    <i class="fas fa-user"></i>
-                    <span>Профиль</span>
-                </a>
             </nav>
 
             <div class="sidebar-footer">
@@ -73,11 +69,31 @@
                 </div>
                 
                 <div class="header-actions">
+                    <div class="service-indicator">
+                        <i id="currentServiceIcon" class="fab fa-yandex" title="Яндекс.Музыка"></i>
+                    </div>
+                    
+                    <div class="profile-mini">
+                        <div class="user-avatar-mini" id="headerUserAvatar">
+                            <i class="fas fa-user"></i>
+                        </div>
+                        <span class="username-mini" id="headerUsername">Загрузка...</span>
+                        <div class="profile-dropdown">
+                            <a href="/profile" class="dropdown-item">
+                                <i class="fas fa-user"></i> Профиль
+                            </a>
+                            <a href="#" class="dropdown-item" onclick="openModal('settingsModal')">
+                                <i class="fas fa-cog"></i> Настройки
+                            </a>
+                            <div class="dropdown-divider"></div>
+                            <a href="#" class="dropdown-item" onclick="logout()">
+                                <i class="fas fa-sign-out-alt"></i> Выйти
+                            </a>
+                        </div>
+                    </div>
+                    
                     <button class="action-btn" title="Уведомления" onclick="openModal('notificationsModal')">
                         <i class="fas fa-bell"></i>
-                    </button>
-                    <button class="action-btn" title="Настройки" onclick="openModal('settingsModal')">
-                        <i class="fas fa-cog"></i>
                     </button>
                 </div>
             </header>
@@ -126,7 +142,7 @@
                     </section>
                 </div>
 
-                <div id="search" class="tab-content">
+                <div id="search" class="tab-content" style="display:none">
                     <div class="section">
                         <div class="section-header">
                             <h3>Поиск музыки</h3>
@@ -142,14 +158,11 @@
                     </div>
                 </div>
 
-                <div id="playlists" class="tab-content">
+                <div id="playlists" class="tab-content" style="display:none">
                     <div class="section">
                         <div class="section-header">
                             <h3>Мои плейлисты</h3>
                             <div class="header-actions">
-                                <button class="action-btn" onclick="createNewPlaylist()" title="Создать плейлист">
-                                    <i class="fas fa-plus"></i> Создать
-                                </button>
                                 <button class="refresh-btn" onclick="loadPlaylists()">
                                     <i class="fas fa-sync-alt"></i>
                                 </button>
@@ -162,7 +175,7 @@
                     </div>
                 </div>
 
-                <div id="liked" class="tab-content">
+                <div id="liked" class="tab-content" style="display:none">
                     <div class="section">
                         <div class="section-header">
                             <h3>Лайкнутые треки</h3>
@@ -177,7 +190,7 @@
                     </div>
                 </div>
 
-                <div id="stats" class="tab-content">
+                <div id="stats" class="tab-content" style="display:none">
                     <div class="section">
                         <div class="section-header">
                             <h3>Статистика прослушивания</h3>
@@ -275,9 +288,24 @@
                     </div>
                     
                     <div class="input-group">
+                        <label for="musicService">Музыкальный сервис:</label>
+                        <select id="musicService" name="music_service">
+                            <option value="yandex">Яндекс.Музыка</option>
+                            <option value="vk">VK Музыка</option>
+                        </select>
+                    </div>
+                    
+                    <div class="input-group">
                         <label class="checkbox-label">
                             <input type="checkbox" id="autoPlayToggle" name="auto_play">
                             <span>Автовоспроизведение</span>
+                        </label>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="showExplicitToggle" name="show_explicit">
+                            <span>Показывать эксплицитный контент</span>
                         </label>
                     </div>
                     
