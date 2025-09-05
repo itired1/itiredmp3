@@ -37,7 +37,7 @@ pip install -r requirements.txt
 python app.py
 ```
 
-4. Откройте браузер и перейдите по адресу `http://localhost:5000`
+4. Откройте браузер и перейдите по адресу `http://localhost:5001`
 
 ## ⚠️ Важная информация
 
@@ -97,7 +97,7 @@ pip install -r requirements.txt
 python app.py
 ```
 
-4. Open your browser and go to `http://localhost:5000`
+4. Open your browser and go to `http://localhost:5001`
 
 ## ⚠️ Important Notice
 
