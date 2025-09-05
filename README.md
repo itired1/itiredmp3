@@ -9,7 +9,6 @@
 ### ✨ Особенности
 - Авторизация через VK и Yandex Music
 - Воспроизведение музыки из ваших аккаунтов
-- Управление плейлистами
 - Современный и интуитивно понятный интерфейс
 - Адаптивный дизайн для различных устройств
 
@@ -19,10 +18,6 @@
 - **Библиотеки**: 
   - [vk_api](https://github.com/python273/vk_api) для работы с API VK
   - [yandex-music-api](https://github.com/MarshalX/yandex-music-api) для работы с API Yandex Music
-
-## 🚀 Демонстрация
-
-![Демонстрация работы плеера](https://pin.it/8XB1AiRsd)
 
 ## 📦 Установка и запуск
 
@@ -50,8 +45,7 @@ python app.py
 
 ## 🔮 Планы развития
 
-- [ ] Добавление поддержки Spotify API
-- [ ] Создание мобильного приложения
+- [ ] Добавление поддержки Spotify API,Ssoundcloud
 - [ ] Разработка оффлайн-режима
 - [ ] Улучшение рекомендательной системы
 - [ ] Добавление социальных функций
@@ -76,7 +70,6 @@ This is a web application for listening to music with VK and Yandex Music integr
 ### ✨ Features
 - Authorization via VK and Yandex Music
 - Music playback from your accounts
-- Playlist management
 - Modern and intuitive interface
 - Responsive design for various devices
 
@@ -86,11 +79,6 @@ This is a web application for listening to music with VK and Yandex Music integr
 - **Libraries**: 
   - [vk_api](https://github.com/python273/vk_api) for VK API integration
   - [yandex-music-api](https://github.com/MarshalX/yandex-music-api) for Yandex Music API integration
-
-## 🚀 Demo
-
-![Player Demo](https://pin.it/8XB1AiRsd)
-
 ## 📦 Installation and Setup
 
 1. Clone the repository:
@@ -117,8 +105,7 @@ The project is under active development. All data, including test emails and oth
 
 ## 🔮 Future Plans
 
-- [ ] Adding Spotify API support
-- [ ] Creating a mobile application
+- [ ] Adding Spotify API support,soundcloud
 - [ ] Developing an offline mode
 - [ ] Improving the recommendation system
 - [ ] Adding social features
