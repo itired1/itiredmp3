@@ -18,12 +18,19 @@ from io import BytesIO
 import requests
 import vk_api
 import re
+import secrets
+import random
+from collections import Counter
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from flask_caching import Cache
 
+# Настройка логирования
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-app.secret_key = os.getenv('SECRET_KEY', 'itired-super-secret-key-2025')
+app.secret_key = os.getenv('SECRET_KEY', secrets.token_hex(32))
 app.permanent_session_lifetime = timedelta(days=30)
 
 DATABASE = 'itired.db'
@@ -36,6 +43,12 @@ EMAIL_CONFIG = {
     'email': 'itiredmp3@gmail.com',
     'password': 'ozbg ahqs jack lerf'
 }
+
+limiter = Limiter(app)
+limiter.key_func = get_remote_address
+
+cache = Cache(config={'CACHE_TYPE': 'SimpleCache', 'CACHE_DEFAULT_TIMEOUT': 300})
+cache.init_app(app)
 
 def adapt_datetime(dt):
     return dt.isoformat()
@@ -123,6 +136,30 @@ def init_db():
             )
         ''')
         
+        # Таблица для хранения истории прослушивания
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS listening_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                track_id TEXT,
+                track_data TEXT,
+                played_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_themes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                name TEXT NOT NULL,
+                colors TEXT NOT NULL,
+                background_url TEXT,
+                is_default BOOLEAN DEFAULT FALSE,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+        ''')
+        
         db.commit()
 
 def login_required(f):
@@ -178,7 +215,6 @@ def get_vk_client(user_id=None):
         if not token:
             return None
         
-        # токен из строки (если передан полный URL)
         if 'access_token=' in token:
             match = re.search(r'access_token=([^&]+)', token)
             if match:
@@ -257,6 +293,240 @@ def save_uploaded_file(file_data, filename):
         logger.error(f"Error saving uploaded file: {e}")
         return None
 
+class EnhancedRecommender:
+    def __init__(self):
+        pass
+    
+    def get_enhanced_recommendations(self, user_id, service='yandex'):  # Убрали async
+        """Получение рекомендаций из нескольких источников"""
+        recommendations = []
+        
+        try:
+            if service == 'yandex':
+                client = get_yandex_client(user_id)
+                if client:
+                    # 1. Рекомендации на основе истории прослушивания
+                    history_recs = self._get_history_based_recommendations(user_id, client)  # Убрали await
+                    recommendations.extend(history_recs)
+                    
+                    # 2. Похожие на любимые треки
+                    liked_recs = self._get_liked_based_recommendations(user_id, client)  # Убрали await
+                    recommendations.extend(liked_recs)
+                    
+                    # 3. Новые релизы и чарты как fallback
+                    if not recommendations:
+                        fallback_recs = self._get_fallback_recommendations(client)  # Убрали await
+                        recommendations.extend(fallback_recs)
+            
+            elif service == 'vk':
+                vk_client = get_vk_client(user_id)
+                if vk_client:
+                    vk_recs = self._get_vk_recommendations(vk_client)  # Убрали await
+                    recommendations.extend(vk_recs)
+            
+            # Убираем дубликаты и перемешиваем
+            return self._deduplicate_and_shuffle(recommendations)
+            
+        except Exception as e:
+            logger.error(f"Enhanced recommendations error: {e}")
+            return []
+    
+    def _get_history_based_recommendations(self, user_id, client):  # Убрали async
+        """Рекомендации на основе истории прослушивания"""
+        try:
+            # Получаем историю прослушивания из базы
+            db = get_db()
+            cursor = db.cursor()
+            cursor.execute('''
+                SELECT track_data FROM listening_history 
+                WHERE user_id = ? 
+                ORDER BY played_at DESC 
+                LIMIT 20
+            ''', (user_id,))
+            
+            history_tracks = []
+            for row in cursor.fetchall():
+                try:
+                    track_data = json.loads(row[0])
+                    history_tracks.append(track_data)
+                except:
+                    continue
+            
+            if not history_tracks:
+                return []
+            
+            # Анализируем историю для рекомендаций
+            recommendations = []
+            
+            # Поиск по жанрам из истории
+            genres = self._extract_genres_from_history(history_tracks)
+            if genres:
+                for genre in genres[:2]:  # Берем 2 самых частых жанра
+                    try:
+                        search_results = client.search(f"жанр:{genre}", type_='track')  # Убрали await
+                        if search_results and search_results.tracks:
+                            for track in search_results.tracks.results[:2]:
+                                recommendations.append(self._format_track(track, 'history_genre'))
+                    except:
+                        continue
+            
+            # Поиск по артистам из истории
+            artists = self._extract_artists_from_history(history_tracks)
+            if artists:
+                for artist in artists[:2]:  # Берем 2 самых частых артиста
+                    try:
+                        search_results = client.search(artist, type_='track')  # Убрали await
+                        if search_results and search_results.tracks:
+                            for track in search_results.tracks.results[:2]:
+                                if not any(t['id'] == f"yandex_{track.id}" for t in recommendations):
+                                    recommendations.append(self._format_track(track, 'history_artist'))
+                    except:
+                        continue
+            
+            return recommendations
+            
+        except Exception as e:
+            logger.error(f"History based recommendations error: {e}")
+            return []
+    
+    def _get_liked_based_recommendations(self, user_id, client):  # Убрали async
+        """Рекомендации на основе лайкнутых треков"""
+        try:
+            liked_tracks = client.users_likes_tracks()  # Убрали await
+            if not liked_tracks:
+                return []
+            
+            recommendations = []
+            
+            # Берем 3 случайных лайкнутых трека
+            sample_tracks = random.sample(list(liked_tracks[:10]), min(3, len(liked_tracks)))
+            
+            for track_short in sample_tracks:
+                try:
+                    track = track_short.fetch_track()  # Убрали await
+                    
+                    # Ищем похожие треки
+                    search_query = f"{track.title} {track.artists[0].name if track.artists else ''}"
+                    similar_tracks = client.search(search_query, type_='track')  # Убрали await
+                    
+                    if similar_tracks and similar_tracks.tracks:
+                        for similar in similar_tracks.tracks.results[:2]:
+                            if similar.id != track.id:
+                                recommendations.append(self._format_track(similar, 'liked_similar'))
+                
+                except Exception as e:
+                    logger.warning(f"Error processing liked track: {e}")
+                    continue
+            
+            return recommendations
+            
+        except Exception as e:
+            logger.error(f"Liked based recommendations error: {e}")
+            return []
+    
+    def _get_fallback_recommendations(self, client):  # Убрали async
+        """Fallback рекомендации (новые релизы и чарты)"""
+        recommendations = []
+        
+        try:
+            # Новые релизы
+            new_releases = client.new_releases()  # Убрали await
+            if new_releases and hasattr(new_releases, 'new_releases'):
+                for album in new_releases.new_releases[:3]:
+                    recommendations.append({
+                        'id': f"yandex_{album.id}",
+                        'title': album.title,
+                        'type': 'album',
+                        'artists': [artist.name for artist in album.artists],
+                        'cover_uri': f"https://{album.cover_uri.replace('%%', '300x300')}" if hasattr(album, 'cover_uri') and album.cover_uri else None,
+                        'source': 'new_releases'
+                    })
+            
+            # Чарты
+            chart = client.chart('world')  # Убрали await
+            if chart and hasattr(chart, 'chart') and chart.chart.tracks:
+                for track in chart.chart.tracks[:3]:
+                    recommendations.append(self._format_track(track, 'chart'))
+                    
+        except Exception as e:
+            logger.error(f"Fallback recommendations error: {e}")
+        
+        return recommendations
+    
+    def _get_vk_recommendations(self, vk_client):  # Убрали async
+        """Рекомендации для VK музыки"""
+        try:
+            recommendations = []
+            vk_recs = vk_client.audio.getRecommendations(count=6)  # Убрали await
+            
+            if 'items' in vk_recs:
+                for track in vk_recs['items']:
+                    recommendations.append({
+                        'id': f"vk_{track['id']}",
+                        'title': track['title'],
+                        'type': 'track',
+                        'artists': [track['artist']],
+                        'cover_uri': track.get('album', {}).get('thumb', {}).get('photo_300') if track.get('album') else None,
+                        'duration': track['duration'] * 1000,
+                        'source': 'vk_recommendations'
+                    })
+            
+            return recommendations
+            
+        except Exception as e:
+            logger.error(f"VK recommendations error: {e}")
+            return []
+    
+    def _extract_genres_from_history(self, history_tracks):
+        """Извлечение жанров из истории прослушивания"""
+        genres = []
+        for track in history_tracks:
+            if 'genre' in track:
+                genres.append(track['genre'])
+            # Можно добавить дополнительную логику для определения жанра
+        return [genre for genre, count in Counter(genres).most_common() if genre]
+    
+    def _extract_artists_from_history(self, history_tracks):
+        """Извлечение артистов из истории прослушивания"""
+        artists = []
+        for track in history_tracks:
+            if 'artists' in track and track['artists']:
+                artists.extend(track['artists'])
+        return [artist for artist, count in Counter(artists).most_common(5)]
+    
+    def _format_track(self, track, source):
+        """Форматирование трека в стандартный формат"""
+        cover_uri = None
+        if hasattr(track, 'cover_uri') and track.cover_uri:
+            cover_uri = f"https://{track.cover_uri.replace('%%', '300x300')}"
+        
+        return {
+            'id': f"yandex_{track.id}",
+            'title': track.title,
+            'type': 'track',
+            'artists': [artist.name for artist in track.artists] if hasattr(track, 'artists') else [],
+            'cover_uri': cover_uri,
+            'album': track.albums[0].title if track.albums else 'Unknown Album',
+            'duration': getattr(track, 'duration_ms', 0),
+            'source': source
+        }
+    
+    def _deduplicate_and_shuffle(self, recommendations):
+        """Удаление дубликатов и перемешивание рекомендаций"""
+        seen_ids = set()
+        unique_recommendations = []
+        
+        for rec in recommendations:
+            if rec['id'] not in seen_ids:
+                seen_ids.add(rec['id'])
+                unique_recommendations.append(rec)
+        
+        random.shuffle(unique_recommendations)
+        return unique_recommendations[:6]  # Возвращаем не более 6 рекомендаций
+
+# Глобальный экземпляр рекомендателя
+recommender = EnhancedRecommender()
+
 init_db()
 
 @app.route('/')
@@ -266,6 +536,7 @@ def index():
     return render_template('index.html')
 
 @app.route('/register', methods=['GET', 'POST'])
+@limiter.limit("3 per minute", error_message='Слишком много попыток регистрации')
 def register():
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
@@ -302,8 +573,20 @@ def register():
             user_to_verify = cursor.fetchone()
             
             if not user_to_verify:
+                cursor.execute(
+                    'SELECT verification_code_expires FROM users WHERE email = ?',
+                    (email,)
+                )
+                expired_user = cursor.fetchone()
+                
+                error_msg = 'Неверный или просроченный код подтверждения'
+                if expired_user and expired_user[0]:
+                    expired_time = datetime.fromisoformat(expired_user[0]) if isinstance(expired_user[0], str) else expired_user[0]
+                    if expired_time < datetime.now():
+                        error_msg = f'Код истек {expired_time.strftime("%H:%M")}. Запросите новый код.'
+                
                 return render_template('auth.html', mode='register_verify', email=email, 
-                                    error='Неверный или просроченный код подтверждения')
+                                    error=error_msg)
             
             cursor.execute(
                 'UPDATE users SET email_verified = TRUE, verification_code = NULL, verification_code_expires = NULL WHERE id = ?',
@@ -343,6 +626,7 @@ def register():
     return render_template('auth.html', mode='register')
 
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit("5 per minute", error_message='Слишком много попыток входа')
 def login():
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
@@ -359,8 +643,20 @@ def login():
         if not user or not bcrypt.checkpw(password.encode('utf-8'), user[4].encode('utf-8')):
             return render_template('auth.html', mode='login', error='Неверное имя пользователя или пароль')
         
-        if not user[8]:
-            return render_template('auth.html', mode='login', error='Email не подтвержден. Проверьте вашу почту')
+        if not user[9]:
+            cursor.execute('SELECT verification_code_expires FROM users WHERE id = ?', (user[0],))
+            expiry = cursor.fetchone()
+            
+            if expiry and expiry[0]:
+                expiry_time = expiry[0] if isinstance(expiry[0], datetime) else datetime.fromisoformat(expiry[0])
+                if expiry_time < datetime.now():
+                    return render_template('auth.html', mode='login', 
+                                        error='Код подтверждения истек. Используйте форму ниже для отправки нового кода.',
+                                        show_resend=True, email=user[3])
+            
+            return render_template('auth.html', mode='login', 
+                                error='Email не подтвержден. Проверьте вашу почту',
+                                show_resend=True, email=user[3])
         
         session.permanent = True
         session['user_id'] = user[0]
@@ -574,6 +870,10 @@ def save_token():
             )
             db.commit()
             
+            cache.delete(f'recommendations_{user[0]}')
+            cache.delete(f'playlists_{user[0]}')
+            cache.delete(f'stats_{user[0]}')
+            
             return jsonify({
                 'success': True, 
                 'message': 'Токен успешно сохранен и проверен',
@@ -586,7 +886,6 @@ def save_token():
         
         elif service == 'vk':
             try:
-                # Извлекаем токен из строки
                 if 'access_token=' in token:
                     match = re.search(r'access_token=([^&]+)', token)
                     if match:
@@ -604,6 +903,10 @@ def save_token():
             )
             db.commit()
             
+            cache.delete(f'recommendations_{user[0]}')
+            cache.delete(f'playlists_{user[0]}')
+            cache.delete(f'stats_{user[0]}')
+            
             return jsonify({
                 'success': True, 
                 'message': 'Токен успешно сохранен и проверен',
@@ -620,98 +923,22 @@ def save_token():
 
 @app.route('/api/recommendations')
 @login_required
-def get_recommendations():
+def get_recommendations():  # Убрали async
     try:
         user = get_current_user()
         service = get_current_music_service(user[0])
         
-        result = []
+        # Используем улучшенную систему рекомендаций
+        recommendations = recommender.get_enhanced_recommendations(user[0], service)  # Убрали await
         
-        if service == 'yandex':
-            client = get_yandex_client(user[0])
-            if not client:
-                return jsonify({'error': 'Токен Яндекс.Музыки не настроен'}), 400
-            
-            try:
-                # Новые релизы с проверкой атрибутов
-                new_releases = client.new_releases()
-                if new_releases and hasattr(new_releases, 'new_releases'):
-                    for album in new_releases.new_releases[:3]:
-                        cover_uri = None
-                        if hasattr(album, 'cover_uri') and album.cover_uri:
-                            cover_uri = f"https://{album.cover_uri.replace('%%', '300x300')}"
-                        
-                        album_id = getattr(album, 'id', 'unknown')
-                        album_title = getattr(album, 'title', 'Unknown Album')
-                        artists = [artist.name for artist in album.artists] if hasattr(album, 'artists') else []
-                        
-                        result.append({
-                            'id': f"yandex_{album_id}",
-                            'title': album_title,
-                            'type': 'album',
-                            'artists': artists,
-                            'cover_uri': cover_uri,
-                            'year': getattr(album, 'year', ''),
-                            'service': 'yandex'
-                        })
-            except Exception as e:
-                logger.warning(f"New releases error: {e}")
-            
-            try:
-                # Чарты с проверкой атрибутов
-                chart = client.chart('world')
-                if chart and hasattr(chart, 'chart') and chart.chart.tracks:
-                    for track in chart.chart.tracks[:3]:
-                        cover_uri = None
-                        if hasattr(track, 'cover_uri') and track.cover_uri:
-                            cover_uri = f"https://{track.cover_uri.replace('%%', '300x300')}"
-                        
-                        track_id = getattr(track, 'id', 'unknown')
-                        track_title = getattr(track, 'title', 'Unknown Track')
-                        artists = [artist.name for artist in track.artists] if hasattr(track, 'artists') else []
-                        album_title = track.albums[0].title if track.albums else 'Unknown Album'
-                        
-                        result.append({
-                            'id': f"yandex_{track_id}",
-                            'title': track_title,
-                            'type': 'track',
-                            'artists': artists,
-                            'cover_uri': cover_uri,
-                            'album': album_title,
-                            'service': 'yandex'
-                        })
-            except Exception as e:
-                logger.warning(f"Chart error: {e}")
-        
-        elif service == 'vk':
-            vk_client = get_vk_client(user[0])
-            if not vk_client:
-                return jsonify({'error': 'Токен VK не настроен'}), 400
-            
-            try:
-                # Получаем рекомендации VK
-                recommendations = vk_client.audio.getRecommendations(count=6)
-                if 'items' in recommendations:
-                    for track in recommendations['items']:
-                        result.append({
-                            'id': f"vk_{track['id']}",
-                            'title': track['title'],
-                            'type': 'track',
-                            'artists': [track['artist']],
-                            'cover_uri': track.get('album', {}).get('thumb', {}).get('photo_300') if track.get('album') else None,
-                            'duration': track['duration'] * 1000,
-                            'service': 'vk'
-                        })
-            except Exception as e:
-                logger.warning(f"VK recommendations error: {e}")
-        
-        return jsonify(result[:6])
+        return jsonify(recommendations)
     except Exception as e:
         logger.error(f"Recommendations error: {e}")
         return jsonify([])
 
 @app.route('/api/playlists')
 @login_required
+@cache.cached(timeout=600, key_prefix=lambda: f'playlists_{session["user_id"]}')
 def get_playlists():
     try:
         user = get_current_user()
@@ -756,7 +983,6 @@ def get_playlists():
                 return jsonify({'error': 'Токен VK не настроен'}), 400
             
             try:
-                # Получаем плейлисты VK
                 playlists = vk_client.audio.getPlaylists()
                 if 'items' in playlists:
                     for playlist in playlists['items']:
@@ -914,7 +1140,6 @@ def get_liked_tracks():
                 return jsonify({'error': 'Токен VK не настроен'}), 400
             
             try:
-                # Получаем лайкнутые треки VK
                 liked_tracks = vk_client.audio.get(count=100)
                 if 'items' in liked_tracks:
                     for track in liked_tracks['items']:
@@ -939,6 +1164,7 @@ def get_liked_tracks():
 
 @app.route('/api/stats')
 @login_required
+@cache.cached(timeout=1800, key_prefix=lambda: f'stats_{session["user_id"]}')
 def get_stats():
     try:
         user = get_current_user()
@@ -992,7 +1218,6 @@ def get_stats():
                 return jsonify({'error': 'Токен VK не настроен'}), 400
             
             try:
-                # Получаем статистику VK
                 liked_tracks = vk_client.audio.get(count=50)
                 playlists = vk_client.audio.getPlaylists()
                 
@@ -1112,7 +1337,6 @@ def search():
                 return jsonify({'error': 'Токен VK не настроен'}), 400
             
             try:
-                # Поиск в VK
                 search_result = vk_client.audio.search(q=query, count=10)
                 
                 if 'items' in search_result:
@@ -1153,8 +1377,26 @@ def get_track_url(service, track_id):
                 best_quality = max(download_info, key=lambda x: x.bitrate_in_kbps)
                 download_url = best_quality.get_direct_link()
                 
+                # Сохраняем в историю прослушивания
                 db = get_db()
                 cursor = db.cursor()
+                
+                track_data = {
+                    'title': track.title,
+                    'artists': [artist.name for artist in track.artists],
+                    'album': track.albums[0].title if track.albums else 'Unknown Album',
+                    'genre': track.albums[0].genre if track.albums and track.albums[0].genre else 'Unknown',
+                    'duration': track.duration_ms,
+                    'cover_uri': f"https://{track.cover_uri.replace('%%', '300x300')}" if track.cover_uri else None
+                }
+                
+                # Сохраняем в историю прослушивания
+                cursor.execute(
+                    'INSERT INTO listening_history (user_id, track_id, track_data) VALUES (?, ?, ?)',
+                    (user[0], f"yandex_{track_id}", json.dumps(track_data))
+                )
+                
+                # Сохраняем в общую активность
                 activity_data = json.dumps({
                     'track': track.title,
                     'artist': ', '.join([artist.name for artist in track.artists]),
@@ -1165,14 +1407,8 @@ def get_track_url(service, track_id):
                     'INSERT INTO user_activity (user_id, activity_type, activity_data) VALUES (?, ?, ?)',
                     (user[0], 'listen', activity_data)
                 )
-                db.commit()
                 
-                track_data = {
-                    'title': track.title,
-                    'artists': [artist.name for artist in track.artists],
-                    'duration': track.duration_ms,
-                    'cover_uri': f"https://{track.cover_uri.replace('%%', '300x300')}" if track.cover_uri else None
-                }
+                db.commit()
                 
                 return jsonify({
                     'url': download_url,
@@ -1191,7 +1427,6 @@ def get_track_url(service, track_id):
                 return jsonify({'error': 'Токен VK не настроен'}), 400
             
             try:
-                # Получаем информацию о треке
                 track_info = vk_client.audio.getById(audios=track_id)
                 if not track_info or 'url' not in track_info[0]:
                     return jsonify({'error': 'Не удалось получить информацию о треке'}), 404
@@ -1200,6 +1435,23 @@ def get_track_url(service, track_id):
                 
                 db = get_db()
                 cursor = db.cursor()
+                
+                # Сохраняем в историю прослушивания
+                vk_track_data = {
+                    'title': track_data['title'],
+                    'artists': [track_data['artist']],
+                    'album': track_data.get('album', {}).get('title', 'Unknown Album'),
+                    'genre': 'Unknown',  # VK не предоставляет жанр
+                    'duration': track_data['duration'] * 1000,
+                    'cover_uri': track_data.get('album', {}).get('thumb', {}).get('photo_300') if track_data.get('album') else None
+                }
+                
+                cursor.execute(
+                    'INSERT INTO listening_history (user_id, track_id, track_data) VALUES (?, ?, ?)',
+                    (user[0], f"vk_{track_id}", json.dumps(vk_track_data))
+                )
+                
+                # Сохраняем в общую активность
                 activity_data = json.dumps({
                     'track': track_data['title'],
                     'artist': track_data['artist'],
@@ -1210,6 +1462,7 @@ def get_track_url(service, track_id):
                     'INSERT INTO user_activity (user_id, activity_type, activity_data) VALUES (?, ?, ?)',
                     (user[0], 'listen', activity_data)
                 )
+                
                 db.commit()
                 
                 return jsonify({
@@ -1270,7 +1523,6 @@ def user_settings():
         db.commit()
         
         return jsonify({'success': True})
-    return jsonify({'error': 'Method not allowed'}), 405
 
 @app.route('/api/notifications')
 @login_required
@@ -1310,6 +1562,42 @@ def resend_verification():
             
     except Exception as e:
         return jsonify({'success': False, 'message': f'Ошибка: {str(e)}'})
+
+@app.route('/api/force_resend_verification', methods=['POST'])
+def force_resend_verification():
+    try:
+        data = request.get_json()
+        email = data.get('email', '').strip().lower()
+        
+        if not email:
+            return jsonify({'success': False, 'message': 'Email обязателен'})
+        
+        db = get_db()
+        cursor = db.cursor()
+        
+        cursor.execute('SELECT * FROM users WHERE email = ?', (email,))
+        user = cursor.fetchone()
+        
+        if not user:
+            return jsonify({'success': False, 'message': 'Пользователь не найден'})
+        
+        verification_code = str(uuid.uuid4())[:6].upper()
+        code_expires = datetime.now() + timedelta(minutes=10)
+        
+        cursor.execute(
+            'UPDATE users SET verification_code = ?, verification_code_expires = ? WHERE email = ?',
+            (verification_code, code_expires, email)
+        )
+        db.commit()
+        
+        if send_verification_email(email, verification_code):
+            return jsonify({'success': True, 'message': 'Новый код отправлен на вашу почту'})
+        else:
+            return jsonify({'success': False, 'message': 'Ошибка отправки email'})
+            
+    except Exception as e:
+        logger.error(f"Force resend error: {e}")
+        return jsonify({'success': False, 'message': 'Внутренняя ошибка сервера'})
 
 @app.route('/api/friends')
 @login_required
@@ -1428,6 +1716,134 @@ def get_user_activity():
         return jsonify(activities)
     except Exception as e:
         logger.error(f"User activity error: {e}")
+        return jsonify([])
+
+@app.route('/api/themes', methods=['GET', 'POST'])
+@login_required
+def user_themes():
+    db = get_db()
+    cursor = db.cursor()
+    user = get_current_user()
+    
+    if request.method == 'GET':
+        # Получаем кастомные темы пользователя
+        cursor.execute('SELECT * FROM user_themes WHERE user_id = ?', (user[0],))
+        themes = cursor.fetchall()
+        
+        # Стандартные пресеты
+        default_themes = {
+            'spotify': {
+                'name': 'Spotify',
+                'colors': {
+                    'bgPrimary': '#121212',
+                    'bgSecondary': '#181818',
+                    'bgTertiary': '#282828',
+                    'textPrimary': '#ffffff',
+                    'textSecondary': '#b3b3b3',
+                    'accent': '#1db954',
+                    'success': '#1db954',
+                    'warning': '#ffa726',
+                    'danger': '#e74c3c'
+                }
+            },
+            'youtube': {
+                'name': 'YouTube Music',
+                'colors': {
+                    'bgPrimary': '#0f0f0f',
+                    'bgSecondary': '#1f1f1f',
+                    'bgTertiary': '#2d2d2d',
+                    'textPrimary': '#ffffff',
+                    'textSecondary': '#aaaaaa',
+                    'accent': '#ff0000',
+                    'success': '#4caf50',
+                    'warning': '#ff9800',
+                    'danger': '#f44336'
+                }
+            },
+            'apple': {
+                'name': 'Apple Music',
+                'colors': {
+                    'bgPrimary': '#000000',
+                    'bgSecondary': '#1a1a1a',
+                    'bgTertiary': '#2a2a2a',
+                    'textPrimary': '#ffffff',
+                    'textSecondary': '#999999',
+                    'accent': '#fa243c',
+                    'success': '#4cd964',
+                    'warning': '#ffcc00',
+                    'danger': '#ff3b30'
+                }
+            }
+        }
+        
+        return jsonify({
+            'customThemes': [{
+                'id': t[0],
+                'name': t[2],
+                'colors': json.loads(t[3]),
+                'background_url': t[4],
+                'is_default': t[5]
+            } for t in themes],
+            'defaultThemes': default_themes
+        })
+    
+    elif request.method == 'POST':
+        data = request.get_json()
+        
+        cursor.execute('''
+            INSERT INTO user_themes (user_id, name, colors, background_url, is_default)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (
+            user[0],
+            data['name'],
+            json.dumps(data['colors']),
+            data.get('background_url'),
+            data.get('is_default', False)
+        ))
+        db.commit()
+        
+        return jsonify({'success': True, 'theme_id': cursor.lastrowid})
+
+@app.route('/api/themes/<int:theme_id>', methods=['DELETE'])
+@login_required
+def delete_theme(theme_id):
+    db = get_db()
+    cursor = db.cursor()
+    user = get_current_user()
+    
+    cursor.execute('DELETE FROM user_themes WHERE id = ? AND user_id = ?', (theme_id, user[0]))
+    db.commit()
+    
+    return jsonify({'success': True})
+
+@app.route('/api/listening_history')
+@login_required
+def get_listening_history():
+    try:
+        user = get_current_user()
+        db = get_db()
+        cursor = db.cursor()
+        
+        cursor.execute('''
+            SELECT track_data, played_at 
+            FROM listening_history 
+            WHERE user_id = ? 
+            ORDER BY played_at DESC 
+            LIMIT 10
+        ''', (user[0],))
+        
+        history = []
+        for row in cursor.fetchall():
+            try:
+                track_data = json.loads(row[0])
+                track_data['played_at'] = row[1].isoformat() if hasattr(row[1], 'isoformat') else str(row[1])
+                history.append(track_data)
+            except:
+                continue
+        
+        return jsonify(history)
+    except Exception as e:
+        logger.error(f"Listening history error: {e}")
         return jsonify([])
 
 @app.errorhandler(500)

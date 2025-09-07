@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ru">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,6 +8,7 @@
     <link rel="stylesheet" href="/static/css/style.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
+
 <body>
     <div class="container">
         <aside class="sidebar">
@@ -68,7 +70,7 @@
                     </button>
                     <h1>Профиль пользователя</h1>
                 </div>
-                
+
                 <div class="header-actions">
                     <button class="action-btn" title="Друзья" onclick="openFriendsModal()">
                         <i class="fas fa-users"></i>
@@ -88,15 +90,16 @@
                                     <i class="fas fa-user"></i>
                                 </div>
                                 <input type="file" id="avatarInput" accept="image/*" hidden>
-                                <button class="avatar-edit-btn" onclick="document.getElementById('avatarInput').click()">
+                                <button class="avatar-edit-btn"
+                                    onclick="document.getElementById('avatarInput').click()">
                                     <i class="fas fa-camera"></i>
                                 </button>
                             </div>
-                            
+
                             <div class="profile-info">
                                 <h2 id="profileDisplayName">Загрузка...</h2>
                                 <p id="profileUsername">@username</p>
-                                
+
                                 <div class="profile-social">
                                     <div class="social-stats">
                                         <div class="stat">
@@ -115,23 +118,23 @@
                         <form id="profileForm" class="profile-form">
                             <div class="form-section">
                                 <h3>Основная информация</h3>
-                                
+
                                 <div class="input-group">
                                     <label for="display_name">Отображаемое имя</label>
-                                    <input type="text" id="display_name" name="display_name" 
-                                           placeholder="Как вас будут видеть другие">
+                                    <input type="text" id="display_name" name="display_name"
+                                        placeholder="Как вас будут видеть другие">
                                 </div>
 
                                 <div class="input-group">
                                     <label for="bio">О себе</label>
-                                    <textarea id="bio" name="bio" rows="3" 
-                                              placeholder="Расскажите о своих музыкальных вкусах..."></textarea>
+                                    <textarea id="bio" name="bio" rows="3"
+                                        placeholder="Расскажите о своих музыкальных вкусах..."></textarea>
                                 </div>
 
                                 <div class="input-group">
                                     <label for="avatar_url">URL аватара</label>
-                                    <input type="url" id="avatar_url" name="avatar_url" 
-                                           placeholder="https://example.com/avatar.jpg">
+                                    <input type="url" id="avatar_url" name="avatar_url"
+                                        placeholder="https://example.com/avatar.jpg">
                                 </div>
                             </div>
 
@@ -146,8 +149,8 @@
 
                                 <div class="input-group">
                                     <label for="yandex_token">OAuth Токен Яндекс.Музыки</label>
-                                    <input type="password" id="yandex_token" name="yandex_token" 
-                                           placeholder="Введите ваш токен">
+                                    <input type="password" id="yandex_token" name="yandex_token"
+                                        placeholder="Введите ваш токен">
                                     <div class="help-text">
                                         <a href="https://github.com/MarshalX/yandex-music-token" target="_blank">
                                             Как получить токен?
@@ -167,13 +170,14 @@
 
                                 <div class="input-group">
                                     <label for="vk_token">Токен VK Музыки</label>
-                                    <input type="password" id="vk_token" name="vk_token" 
-                                           placeholder="Введите ваш токен VK">
+                                    <input type="password" id="vk_token" name="vk_token"
+                                        placeholder="Введите ваш токен VK">
                                     <div class="help-text">
                                         <a href="https://vkhost.github.io/" target="_blank">
                                             Как получить токен VK?
                                         </a>
-                                        <p>Выберите "Audio", разрешите доступ и скопируйте часть URL после access_token= до &expires_in</p>
+                                        <p>Выберите "Audio", разрешите доступ и скопируйте часть URL после access_token=
+                                            до &expires_in</p>
                                     </div>
                                 </div>
                             </div>
@@ -204,6 +208,13 @@
                                 <span class="info-label">Лайкнуто треков:</span>
                                 <span class="info-value" id="totalTracks">0</span>
                             </div>
+                            <button id="openThemeEditor" class="action-btn">
+                                <i class="fas fa-palette"></i> Редактор тем
+                            </button>
+
+                            <button id="changeBackgroundBtn" class="action-btn">
+                                <i class="fas fa-image"></i> Сменить фон
+                            </button>
                         </div>
 
                         <div class="info-card">
@@ -292,11 +303,11 @@
                     <button class="tab-btn" onclick="showFriendsTab('requests')">Запросы</button>
                     <button class="tab-btn" onclick="showFriendsTab('suggestions')">Предложения</button>
                 </div>
-                
+
                 <div class="friends-search">
                     <input type="text" id="friendsSearch" placeholder="Поиск друзей..." oninput="searchFriends()">
                 </div>
-                
+
                 <div class="friends-list" id="friendsList">
                     <div class="loading">Загрузка друзей...</div>
                 </div>
@@ -322,7 +333,7 @@
                             <option value="green">Зеленая</option>
                         </select>
                     </div>
-                    
+
                     <div class="input-group">
                         <label for="languageSelect">Язык:</label>
                         <select id="languageSelect" name="language">
@@ -330,7 +341,7 @@
                             <option value="en">English</option>
                         </select>
                     </div>
-                    
+
                     <div class="input-group">
                         <label for="musicService">Музыкальный сервис:</label>
                         <select id="musicService" name="music_service">
@@ -338,21 +349,21 @@
                             <option value="vk">VK Музыка</option>
                         </select>
                     </div>
-                    
+
                     <div class="input-group">
                         <label class="checkbox-label">
                             <input type="checkbox" id="autoPlayToggle" name="auto_play">
                             <span>Автовоспроизведение</span>
                         </label>
                     </div>
-                    
+
                     <div class="input-group">
                         <label class="checkbox-label">
                             <input type="checkbox" id="showExplicitToggle" name="show_explicit">
                             <span>Показывать эксплицитный контент</span>
                         </label>
                     </div>
-                    
+
                     <div class="form-actions">
                         <button type="submit" class="save-btn">Сохранить</button>
                         <button type="button" class="cancel-btn" onclick="closeModal('settingsModal')">Отмена</button>
@@ -366,4 +377,5 @@
 
     <script src="/static/js/profile.js"></script>
 </body>
+
 </html>

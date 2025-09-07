@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ru">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,6 +8,7 @@
     <link rel="stylesheet" href="/static/css/style.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
+
 <body>
     <div class="container">
         <aside class="sidebar">
@@ -38,6 +40,15 @@
                     <i class="fas fa-chart-bar"></i>
                     <span>Статистика</span>
                 </a>
+                <a href="#" class="nav-item" onclick="openThemesModal(); return false;">
+                    <i class="fas fa-palette"></i>
+                    <span>Темы</span>
+                </a>
+
+                <a href="#" class="nav-item" onclick="openSettingsModal(); return false;">
+                    <i class="fas fa-cog"></i>
+                    <span>Настройки</span>
+                </a>
             </nav>
 
             <div class="sidebar-footer">
@@ -67,12 +78,12 @@
                         <input type="text" id="globalSearch" placeholder="Поиск музыки...">
                     </div>
                 </div>
-                
+
                 <div class="header-actions">
                     <div class="service-indicator">
                         <i id="currentServiceIcon" class="fab fa-yandex" title="Яндекс.Музыка"></i>
                     </div>
-                    
+
                     <div class="profile-mini">
                         <div class="user-avatar-mini" id="headerUserAvatar">
                             <i class="fas fa-user"></i>
@@ -91,7 +102,7 @@
                             </a>
                         </div>
                     </div>
-                    
+
                     <button class="action-btn" title="Уведомления" onclick="openModal('notificationsModal')">
                         <i class="fas fa-bell"></i>
                     </button>
@@ -150,7 +161,8 @@
                         <div class="search-container">
                             <div class="search-box" style="max-width: 100%">
                                 <i class="fas fa-search"></i>
-                                <input type="text" id="searchInput" placeholder="Введите название трека, альбома или исполнителя...">
+                                <input type="text" id="searchInput"
+                                    placeholder="Введите название трека, альбома или исполнителя...">
                                 <button class="search-btn" onclick="performSearch()">Найти</button>
                             </div>
                         </div>
@@ -199,7 +211,7 @@
                             </button>
                         </div>
                         <div class="stats-grid" id="statsGrid"></div>
-                        
+
                         <div class="section" style="margin-top: 30px">
                             <h3>Статистика по жанрам</h3>
                             <div id="genreChart" class="genre-chart"></div>
@@ -278,7 +290,7 @@
                             <option value="green">Зеленая</option>
                         </select>
                     </div>
-                    
+
                     <div class="input-group">
                         <label for="languageSelect">Язык:</label>
                         <select id="languageSelect" name="language">
@@ -286,7 +298,7 @@
                             <option value="en">English</option>
                         </select>
                     </div>
-                    
+
                     <div class="input-group">
                         <label for="musicService">Музыкальный сервис:</label>
                         <select id="musicService" name="music_service">
@@ -294,21 +306,21 @@
                             <option value="vk">VK Музыка</option>
                         </select>
                     </div>
-                    
+
                     <div class="input-group">
                         <label class="checkbox-label">
                             <input type="checkbox" id="autoPlayToggle" name="auto_play">
                             <span>Автовоспроизведение</span>
                         </label>
                     </div>
-                    
+
                     <div class="input-group">
                         <label class="checkbox-label">
                             <input type="checkbox" id="showExplicitToggle" name="show_explicit">
                             <span>Показывать эксплицитный контент</span>
                         </label>
                     </div>
-                    
+
                     <div class="form-actions">
                         <button type="submit" class="save-btn">Сохранить</button>
                         <button type="button" class="cancel-btn" onclick="closeModal('settingsModal')">Отмена</button>
@@ -335,7 +347,94 @@
             </div>
         </div>
     </div>
+    <!-- Добавьте перед закрывающим тегом </body> -->
 
+    <!-- Модальное окно очереди -->
+    <div id="queueModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Очередь воспроизведения</h3>
+                <button class="modal-close" onclick="closeModal('queueModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="queue-container" id="queueContainer"></div>
+                <div class="modal-actions">
+                    <button class="btn-danger" onclick="clearQueue()">Очистить очередь</button>
+                    <button class="btn-secondary" onclick="closeModal('queueModal')">Закрыть</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно управления темами -->
+    <div id="themesModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Управление темами</h3>
+                <button class="modal-close" onclick="closeModal('themesModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="themesContainer"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно создания темы -->
+    <div id="themeCreatorModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Создать тему</h3>
+                <button class="modal-close" onclick="closeModal('themeCreatorModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="themeCreatorForm" class="theme-creator">
+                    <div class="input-group">
+                        <label for="themeName">Название темы</label>
+                        <input type="text" id="themeName" required>
+                    </div>
+
+                    <div class="color-picker">
+                        <div class="color-input">
+                            <label for="bgPrimary">Основной фон</label>
+                            <input type="color" id="bgPrimary" value="#0a0a0a">
+                        </div>
+                        <div class="color-input">
+                            <label for="bgSecondary">Вторичный фон</label>
+                            <input type="color" id="bgSecondary" value="#141414">
+                        </div>
+                        <div class="color-input">
+                            <label for="textPrimary">Основной текст</label>
+                            <input type="color" id="textPrimary" value="#ffffff">
+                        </div>
+                        <div class="color-input">
+                            <label for="textSecondary">Вторичный текст</label>
+                            <input type="color" id="textSecondary" value="#a0a0a0">
+                        </div>
+                        <div class="color-input">
+                            <label for="accent">Акцентный цвет</label>
+                            <input type="color" id="accent" value="#ff6b6b">
+                        </div>
+                        <div class="color-input">
+                            <label for="success">Цвет успеха</label>
+                            <input type="color" id="success" value="#4ecdc4">
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="themeBackground">Фоновое изображение (URL)</label>
+                        <input type="url" id="themeBackground" placeholder="https://example.com/background.jpg">
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn-primary">Сохранить тему</button>
+                        <button type="button" class="btn-secondary"
+                            onclick="closeModal('themeCreatorModal')">Отмена</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
     <script src="/static/js/script.js"></script>
 </body>
+
 </html>

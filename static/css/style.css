@@ -1719,3 +1719,903 @@ body {
 .playlist-card, .track-item {
     position: relative;
 }
+/* Стили для очереди воспроизведения */
+.queue-container {
+    max-height: 400px;
+    overflow-y: auto;
+    margin-top: 15px;
+}
+
+.queue-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+}
+
+.queue-count {
+    color: var(--text-secondary);
+    font-size: 0.9em;
+}
+
+.queue-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px;
+    margin-bottom: 8px;
+    background: var(--bg-card);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    transition: all 0.3s ease;
+}
+
+.queue-item.current {
+    border-color: var(--accent);
+    background: var(--bg-tertiary);
+}
+
+.queue-item:hover {
+    border-color: var(--accent);
+}
+
+.queue-info {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+}
+
+.queue-number {
+    margin-right: 10px;
+    color: var(--text-secondary);
+    font-weight: 500;
+    min-width: 20px;
+}
+
+.queue-cover {
+    width: 40px;
+    height: 40px;
+    border-radius: 6px;
+    margin-right: 12px;
+    object-fit: cover;
+}
+
+.queue-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.queue-title {
+    font-weight: 500;
+    font-size: 0.9em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.queue-artist {
+    color: var(--text-secondary);
+    font-size: 0.8em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.queue-actions {
+    display: flex;
+    gap: 5px;
+}
+
+.queue-action-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 4px;
+    transition: all 0.3s ease;
+}
+
+.queue-action-btn:hover {
+    color: var(--accent);
+    background: var(--bg-tertiary);
+}
+
+.empty-queue {
+    text-align: center;
+    padding: 40px;
+    color: var(--text-secondary);
+}
+
+/* Кнопка добавления в очередь */
+.queue-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+    opacity: 0;
+}
+
+.track-item:hover .queue-btn,
+.playlist-card:hover .queue-btn {
+    opacity: 1;
+}
+
+.queue-btn:hover {
+    color: var(--accent);
+    background: var(--bg-tertiary);
+}
+
+/* Компактный режим плеера */
+.player.compact {
+    height: 60px;
+    padding: 8px 15px;
+}
+
+.player.compact .player-track {
+    min-width: auto;
+    flex: 0 1 auto;
+}
+
+.player.compact .track-cover {
+    width: 40px;
+    height: 40px;
+}
+
+.player.compact .track-details {
+    max-width: 200px;
+}
+
+.player.compact .player-controls {
+    gap: 5px;
+}
+
+.player.compact .control-btn {
+    width: 28px;
+    height: 28px;
+}
+
+.player.compact .play-btn {
+    width: 32px;
+    height: 32px;
+}
+
+/* Виджет рабочего стола */
+.desktop-widget {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 300px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 15px;
+    z-index: 1000;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    cursor: move;
+}
+
+.widget-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+}
+
+.widget-header button {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+}
+
+.widget-header button:hover {
+    color: var(--accent);
+    background: var(--bg-tertiary);
+}
+
+.widget-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 15px;
+}
+
+.widget-cover {
+    width: 48px;
+    height: 48px;
+    border-radius: 8px;
+    object-fit: cover;
+}
+
+.widget-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.widget-title {
+    font-weight: 500;
+    font-size: 0.9em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.widget-artist {
+    color: var(--text-secondary);
+    font-size: 0.8em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.widget-controls {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+}
+
+.widget-controls button {
+    background: var(--bg-tertiary);
+    border: none;
+    color: var(--text-primary);
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.widget-controls button:hover {
+    background: var(--accent);
+    color: white;
+}
+
+/* Уведомления о смене трека */
+.track-notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 15px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    z-index: 1000;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    animation: slideInRight 0.3s ease;
+}
+
+.track-notification img {
+    width: 48px;
+    height: 48px;
+    border-radius: 8px;
+    object-fit: cover;
+}
+
+.notification-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.notification-title {
+    color: var(--text-secondary);
+    font-size: 0.8em;
+    margin-bottom: 2px;
+}
+
+.notification-track {
+    font-weight: 500;
+    font-size: 0.9em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.notification-artist {
+    color: var(--text-secondary);
+    font-size: 0.8em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Анимации */
+@keyframes slideOutRight {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+}
+
+/* Кастомные темы */
+.themes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 15px;
+    margin-top: 20px;
+}
+
+.theme-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.theme-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+}
+
+.theme-preview {
+    height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.theme-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.theme-colors {
+    display: flex;
+    gap: 5px;
+    padding: 10px;
+}
+
+.theme-colors span {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+}
+
+.theme-info {
+    padding: 15px;
+}
+
+.theme-info h4 {
+    margin-bottom: 10px;
+    font-size: 1em;
+}
+
+.theme-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.theme-actions button {
+    flex: 1;
+    padding: 6px 8px;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.8em;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.theme-actions button:first-child {
+    background: var(--accent);
+    color: white;
+}
+
+.theme-actions button:first-child:hover {
+    background: var(--accent-hover);
+}
+
+.theme-actions button:not(:first-child) {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.theme-actions button:not(:first-child):hover {
+    background: var(--bg-secondary);
+}
+
+/* Редактор тем */
+.theme-creator {
+    padding: 20px;
+}
+
+.color-picker {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.color-input {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.color-input label {
+    font-size: 0.9em;
+    color: var(--text-secondary);
+}
+
+.color-input input {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.theme-preview-area {
+    height: 100px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+}
+
+/* Статистика */
+.genre-chart-container {
+    margin-top: 20px;
+}
+
+.genre-item {
+    margin-bottom: 15px;
+}
+
+.genre-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+    font-size: 0.9em;
+}
+
+.genre-name {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.genre-count {
+    color: var(--text-secondary);
+}
+
+.genre-bar {
+    height: 8px;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.genre-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+    .queue-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    
+    .queue-actions {
+        align-self: flex-end;
+    }
+    
+    .desktop-widget {
+        width: 90%;
+        right: 5%;
+        bottom: 80px;
+    }
+    
+    .color-picker {
+        grid-template-columns: 1fr;
+    }
+    
+    .themes-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Улучшенные уведомления */
+.notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 12px 20px;
+    border-radius: 8px;
+    color: white;
+    font-weight: 500;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    animation: slideInRight 0.3s ease;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.notification.success {
+    background: var(--success);
+}
+
+.notification.error {
+    background: var(--danger);
+}
+
+.notification.info {
+    background: var(--accent);
+}
+
+.notification.warning {
+    background: var(--warning);
+    color: #000;
+}
+
+/* Анимация вращения для cover */
+@keyframes rotateCover {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.player-track .track-cover.playing {
+    animation: rotateCover 20s linear infinite;
+}
+
+/* Стили для перетаскивания */
+.draggable {
+    cursor: move;
+    user-select: none;
+}
+
+/* Дополнительные утилиты */
+.text-ellipsis {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.flex-1 {
+    flex: 1;
+}
+
+.min-width-0 {
+    min-width: 0;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.visible {
+    display: block !important;
+}
+/* Переменные для тем */
+:root {
+    /* Основные цвета */
+    --bg-primary: #0a0a0a;
+    --bg-secondary: #141414;
+    --bg-tertiary: #1f1f1f;
+    --text-primary: #ffffff;
+    --text-secondary: #a0a0a0;
+    --accent: #ff6b6b;
+    --success: #4ecdc4;
+    --warning: #ffe66d;
+    --danger: #ff6b6b;
+    
+    /* Фон */
+    --background-image: none;
+    --background-size: cover;
+    --background-position: center;
+}
+
+/* Применение фона */
+body {
+    background-color: var(--bg-primary);
+    background-image: var(--background-image);
+    background-size: var(--background-size);
+    background-position: var(--background-position);
+    background-attachment: fixed;
+    transition: all 0.5s ease;
+}
+
+/* Стили для редактора тем */
+.theme-editor {
+    padding: 20px;
+}
+
+.color-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
+    margin: 20px 0;
+}
+
+.color-picker-item {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.color-preview {
+    width: 100%;
+    height: 40px;
+    border-radius: 8px;
+    border: 2px solid var(--border);
+    cursor: pointer;
+}
+
+/* Анимированные фоны */
+.animated-bg {
+    animation: backgroundShift 30s ease-in-out infinite;
+}
+
+@keyframes backgroundShift {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+}
+
+.parallax-bg {
+    background-attachment: fixed !important;
+}
+/* Стили для модального окна настроек */
+.settings-modal .modal-content {
+    max-width: 500px;
+    background: var(--bg-card);
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+.settings-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-secondary);
+}
+
+.settings-header h3 {
+    margin: 0;
+    font-size: 1.3em;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.settings-body {
+    padding: 24px;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.setting-group {
+    margin-bottom: 20px;
+}
+
+.setting-group label {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.setting-group select,
+.setting-group input[type="text"] {
+    width: 100%;
+    padding: 12px 16px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 1em;
+}
+
+.setting-group select:focus,
+.setting-group input[type="text"]:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.1);
+}
+
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 24px;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--bg-tertiary);
+    transition: .4s;
+    border-radius: 24px;
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+}
+
+input:checked + .toggle-slider {
+    background-color: var(--accent);
+}
+
+input:checked + .toggle-slider:before {
+    transform: translateX(26px);
+}
+
+.settings-footer {
+    padding: 16px 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    background: var(--bg-secondary);
+}
+
+.btn-primary {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.btn-primary:hover {
+    background: var(--accent-hover);
+    transform: translateY(-1px);
+}
+
+.btn-secondary {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-secondary:hover {
+    background: var(--bg-secondary);
+}
+/* Стили для работы с кастомными темами */
+.themes-modal .modal-content {
+    max-width: 800px;
+}
+
+.themes-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-secondary);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.themes-header h3 {
+    margin: 0;
+    font-size: 1.3em;
+    font-weight: 600;
+}
+
+.themes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 20px;
+    padding: 24px;
+}
+
+.theme-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.theme-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+}
+
+.theme-preview {
+    height: 120px;
+    position: relative;
+    overflow: hidden;
+}
+
+.theme-colors {
+    display: flex;
+    height: 100%;
+}
+
+.theme-colors span {
+    flex: 1;
+}
+
+.theme-info {
+    padding: 16px;
+}
+
+.theme-info h4 {
+    margin: 0 0 8px 0;
+    font-size: 1em;
+    font-weight: 600;
+}
+
+.theme-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.theme-actions button {
+    flex: 1;
+    padding: 6px 12px;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.85em;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.theme-actions button:first-child {
+    background: var(--accent);
+    color: white;
+}
+
+.theme-actions button:first-child:hover {
+    background: var(--accent-hover);
+}
+
+.theme-actions button:last-child {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.theme-actions button:last-child:hover {
+    background: var(--bg-secondary);
+}

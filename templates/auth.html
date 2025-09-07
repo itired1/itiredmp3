@@ -22,10 +22,19 @@
             <form method="POST" class="auth-form">
                 <h2>Подтверждение email</h2>
                 
+                {% if message %}
                 <div class="success-message">
                     <i class="fas fa-check-circle"></i>
                     {{ message }}
                 </div>
+                {% endif %}
+
+                {% if error %}
+                <div class="error-message">
+                    <i class="fas fa-exclamation-circle"></i>
+                    {{ error }}
+                </div>
+                {% endif %}
 
                 <div class="input-group">
                     <label for="verification_code">Код подтверждения</label>
@@ -44,7 +53,7 @@
             </form>
 
             <div class="auth-footer">
-                <p>Не получили код? <a href="#" onclick="resendCode('{{ email }}')">Отправить повторно</a></p>
+                <p>Не получили код? <a href="#" onclick="resendVerification('{{ email }}')">Отправить повторно</a></p>
             </div>
 
             {% else %}
@@ -97,6 +106,16 @@
                 </button>
             </form>
 
+            {% if show_resend %}
+            <div class="resend-section" style="margin-top: 20px; padding: 15px; background: var(--bg-tertiary); border-radius: 8px;">
+                <p style="margin-bottom: 10px;">Не получили письмо или код истек?</p>
+                <button onclick="resendVerification('{{ email }}')" 
+                        style="background: var(--accent); color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer;">
+                    Отправить код повторно
+                </button>
+            </div>
+            {% endif %}
+
             <div class="auth-footer">
                 <p>
                     {{ 'Уже есть аккаунт?' if mode == 'register' else 'Нет аккаунта?' }}
@@ -141,8 +160,8 @@
             confirmPassword.onkeyup = validatePassword;
         }
 
-        function resendCode(email) {
-            fetch('/api/resend_verification', {
+        function resendVerification(email) {
+            fetch('/api/force_resend_verification', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -152,13 +171,13 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    alert('Код отправлен повторно! Проверьте вашу почту.');
+                    alert('✅ Новый код отправлен! Проверьте вашу почту.');
                 } else {
-                    alert('Ошибка: ' + data.message);
+                    alert('❌ Ошибка: ' + data.message);
                 }
             })
             .catch(error => {
-                alert('Ошибка отправки запроса');
+                alert('❌ Ошибка отправки запроса');
             });
         }
     </script>
