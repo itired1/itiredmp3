@@ -1790,20 +1790,27 @@ def user_themes():
     elif request.method == 'POST':
         data = request.get_json()
         
-        cursor.execute('''
-            INSERT INTO user_themes (user_id, name, colors, background_url, is_default)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (
-            user[0],
-            data['name'],
-            json.dumps(data['colors']),
-            data.get('background_url'),
-            data.get('is_default', False)
-        ))
-        db.commit()
+        # Проверяем обязательные поля
+        if not data or 'name' not in data or 'colors' not in data:
+            return jsonify({'success': False, 'error': 'Отсутствуют обязательные поля: name и colors'}), 400
         
-        return jsonify({'success': True, 'theme_id': cursor.lastrowid})
-
+        try:
+            cursor.execute('''
+                INSERT INTO user_themes (user_id, name, colors, background_url, is_default)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (
+                user[0],
+                data['name'],
+                json.dumps(data['colors']),
+                data.get('background_url'),
+                data.get('is_default', False)
+            ))
+            db.commit()
+            
+            return jsonify({'success': True, 'theme_id': cursor.lastrowid})
+        except Exception as e:
+            logger.error(f"Theme creation error: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
 @app.route('/api/themes/<int:theme_id>', methods=['DELETE'])
 @login_required
 def delete_theme(theme_id):

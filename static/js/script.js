@@ -288,14 +288,13 @@ function setupEventListeners() {
     });
   }
 }
-// Управление кастомными темами
-async function loadThemesModal() {
-  try {
-    const response = await apiCall("themes");
-    const themesContainer = document.getElementById("themesContainer");
+async function loadThemes() {
+    try {
+        const response = await apiCall("themes");
+        const themesContainer = document.getElementById("themesContainer");
 
-    if (response && themesContainer) {
-      let html = `
+        if (response && themesContainer) {
+            let html = `
                 <div class="themes-header">
                     <h4>Мои темы</h4>
                     <button class="btn-primary" onclick="showThemeCreator()">
@@ -305,118 +304,118 @@ async function loadThemesModal() {
                 <div class="themes-grid">
             `;
 
-      if (response.customThemes && response.customThemes.length > 0) {
-        response.customThemes.forEach((theme) => {
-          html += `
-                        <div class="theme-card" style="background: ${
-                          theme.colors.bgPrimary || "#1a1a1a"
-                        }; color: ${theme.colors.textPrimary || "#ffffff"}">
-                            <div class="theme-preview" style="background: ${
-                              theme.colors.bgSecondary || "#2a2a2a"
-                            }">
-                                ${
-                                  theme.background_url
-                                    ? `<img src="${theme.background_url}" alt="${theme.name}">`
-                                    : `<div class="theme-colors">
-                                        <span style="background: ${
-                                          theme.colors.accent || "#ff6b6b"
-                                        }"></span>
-                                        <span style="background: ${
-                                          theme.colors.success || "#4ecdc4"
-                                        }"></span>
-                                        <span style="background: ${
-                                          theme.colors.warning || "#ffe66d"
-                                        }"></span>
+            if (response.customThemes && response.customThemes.length > 0) {
+                response.customThemes.forEach((theme) => {
+                    html += `
+                        <div class="theme-card">
+                            <div class="theme-preview" style="background: ${theme.colors.bgPrimary || '#1a1a1a'}">
+                                ${theme.background_url ? 
+                                    `<img src="${theme.background_url}" alt="${theme.name}">` : 
+                                    `<div class="theme-colors">
+                                        <span style="background: ${theme.colors.accent || '#ff6b6b'}"></span>
+                                        <span style="background: ${theme.colors.success || '#4ecdc4'}"></span>
+                                        <span style="background: ${theme.colors.warning || '#ffe66d'}"></span>
                                     </div>`
                                 }
                             </div>
                             <div class="theme-info">
                                 <h5>${theme.name}</h5>
                                 <div class="theme-actions">
-                                    <button onclick="applyTheme('${
-                                      theme.name
-                                    }')">Применить</button>
-                                    <button onclick="deleteTheme(${
-                                      theme.id
-                                    })">Удалить</button>
+                                    <button onclick="applyTheme('${theme.name}')">Применить</button>
+                                    <button onclick="deleteTheme(${theme.id})">Удалить</button>
                                 </div>
                             </div>
                         </div>
                     `;
-        });
-      } else {
-        html += "<p>Нет созданных тем</p>";
-      }
+                });
+            } else {
+                html += "<p class='empty-state'>Нет созданных тем</p>";
+            }
 
-      html += "</div>";
-      themesContainer.innerHTML = html;
+            html += "</div>";
+            themesContainer.innerHTML = html;
+        }
+    } catch (error) {
+        console.error("Error loading themes:", error);
+        showNotification("Ошибка загрузки тем", "error");
     }
-  } catch (error) {
-    console.error("Error loading themes:", error);
-  }
 }
-
+function applyTheme(themeName) {
+    // Здесь будет логика применения темы
+    showNotification(`Тема "${themeName}" применена`, "success");
+    closeModal("themesModal");
+}
 function showThemeCreator() {
   closeModal("themesModal");
   openModal("themeCreatorModal");
 }
 
-document
-  .getElementById("themeCreatorForm")
-  ?.addEventListener("submit", async function (e) {
+document.getElementById("themeCreatorForm")?.addEventListener("submit", async function(e) {
     e.preventDefault();
 
     const themeData = {
-      name: document.getElementById("themeName").value,
-      colors: {
-        bgPrimary: document.getElementById("bgPrimary").value,
-        bgSecondary: document.getElementById("bgSecondary").value,
-        textPrimary: document.getElementById("textPrimary").value,
-        textSecondary: document.getElementById("textSecondary").value,
-        accent: document.getElementById("accent").value,
-        success: document.getElementById("success").value,
-      },
-      background_url: document.getElementById("themeBackground").value || null,
+        name: document.getElementById("themeName").value,
+        colors: {
+            bgPrimary: document.getElementById("bgPrimary").value,
+            bgSecondary: document.getElementById("bgSecondary").value,
+            textPrimary: document.getElementById("textPrimary").value,
+            textSecondary: document.getElementById("textSecondary").value,
+            accent: document.getElementById("accent").value,
+            success: document.getElementById("success").value,
+        },
+        background_url: document.getElementById("themeBackground").value || null,
     };
 
-    await saveCustomTheme(themeData);
-  });
-
-async function saveCustomTheme(themeData) {
-  try {
-    const response = await apiCall("themes", {
-      method: "POST",
-      body: JSON.stringify({
-        action: "save_custom",
-        theme: themeData,
-      }),
-    });
-
-    if (response.success) {
-      showNotification("Тема сохранена", "success");
-      closeModal("themeCreatorModal");
-      await loadThemes();
+    // Валидация
+    if (!themeData.name.trim()) {
+        showNotification("Введите название темы", "error");
+        return;
     }
-  } catch (error) {
-    showNotification("Ошибка сохранения темы", "error");
-  }
+
+    await saveCustomTheme(themeData);
+});
+async function saveCustomTheme(themeData) {
+    try {
+        const response = await apiCall("themes", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                action: "save_custom",
+                theme: themeData,
+            }),
+        });
+
+        if (response.success) {
+            showNotification("Тема сохранена", "success");
+            closeModal("themeCreatorModal");
+            await loadThemes();
+        } else {
+            showNotification(response.error || "Ошибка сохранения темы", "error");
+        }
+    } catch (error) {
+        showNotification("Ошибка сохранения темы", "error");
+    }
 }
 
 async function deleteTheme(themeId) {
-  if (confirm("Удалить эту тему?")) {
-    try {
-      const response = await apiCall(`themes?id=${themeId}`, {
-        method: "DELETE",
-      });
+    if (confirm("Удалить эту тему?")) {
+        try {
+            const response = await apiCall(`themes/${themeId}`, {
+                method: "DELETE",
+            });
 
-      if (response.success) {
-        showNotification("Тема удалена", "success");
-        await loadThemes();
-      }
-    } catch (error) {
-      showNotification("Ошибка удаления темы", "error");
+            if (response.success) {
+                showNotification("Тема удалена", "success");
+                await loadThemes();
+            } else {
+                showNotification("Ошибка удаления темы", "error");
+            }
+        } catch (error) {
+            showNotification("Ошибка удаления темы", "error");
+        }
     }
-  }
 }
 
 // Горячие клавиши
