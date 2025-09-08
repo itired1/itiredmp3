@@ -15,8 +15,7 @@ class BackgroundManager {
         });
     }
 
-    openBackgroundSelector() {
-        // Здесь будет интерфейс выбора фона
+    openBackgroundSelector() {
         const modalContent = `
             <div class="background-selector">
                 <h3>Выбор фона</h3>
@@ -112,9 +111,7 @@ class BackgroundManager {
         document.body.style.backgroundImage = `url('${config.imageUrl}')`;
         document.body.style.backgroundAttachment = 'fixed';
         document.body.style.backgroundSize = 'cover';
-        document.body.style.backgroundPosition = 'center';
-
-        // Добавляем эффект параллакса при скролле
+        document.body.style.backgroundPosition = 'center';
         window.addEventListener('scroll', this.handleParallaxScroll);
     }
 
@@ -144,7 +141,5 @@ class BackgroundManager {
             }
         }
     }
-}
-
-// Инициализация
+}
 const backgroundManager = new BackgroundManager();
