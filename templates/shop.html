@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Магазин - iTired</title>
+    <link rel="stylesheet" href="/static/css/shop.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header class="shop-header">
+            <h1><i class="fas fa-store"></i> Магазин</h1>
+            <div class="currency-display">
+                <span class="balance" id="userBalance">0</span>
+                <i class="fas fa-coins"></i>
+            </div>
+        </header>
+
+        <div class="categories-nav">
+            <button class="category-btn active" data-category="all">Все товары</button>
+            <button class="category-btn" data-category="themes">Темы</button>
+            <button class="category-btn" data-category="avatars">Аватары</button>
+            <button class="category-btn" data-category="banners">Баннеры</button>
+            <button class="category-btn" data-category="badges">Бейджи</button>
+            <button class="category-btn" data-category="effects">Эффекты</button>
+        </div>
+
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="Поиск товаров...">
+            <i class="fas fa-search"></i>
+        </div>
+
+        <div class="shop-grid" id="shopItems">
+            <!-- Товары будут загружены через JavaScript -->
+        </div>
+
+        <div class="loading" id="loading">
+            <i class="fas fa-spinner fa-spin"></i>
+            Загрузка товаров...
+        </div>
+
+        <!-- Модальное окно покупки -->
+        <div class="modal" id="purchaseModal">
+            <div class="modal-content">
+                <h3>Подтверждение покупки</h3>
+                <p id="modalItemName"></p>
+                <p>Стоимость: <span id="modalItemPrice"></span> <i class="fas fa-coins"></i></p>
+                <div class="modal-actions">
+                    <button class="btn-secondary" onclick="closeModal()">Отмена</button>
+                    <button class="btn-primary" onclick="confirmPurchase()">Купить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/shop.js"></script>
+</body>
+</html>

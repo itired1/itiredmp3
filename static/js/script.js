@@ -134,7 +134,7 @@ function openSettingsModal() {
     `;
 
   showCustomModal(modalContent, "settingsModal");
-  loadSettings(); // Загружаем текущие настройки
+  loadSettings(); 
 }
 
 function openThemesModal() {
@@ -184,7 +184,6 @@ function closeModal(modalId) {
   }
 }
 
-// Функция для загрузки настроек в форму
 async function loadSettings() {
   try {
     const settings = await apiCall("settings");
@@ -341,7 +340,6 @@ async function loadThemes() {
     }
 }
 function applyTheme(themeName) {
-    // Здесь будет логика применения темы
     showNotification(`Тема "${themeName}" применена`, "success");
     closeModal("themesModal");
 }
@@ -366,7 +364,6 @@ document.getElementById("themeCreatorForm")?.addEventListener("submit", async fu
         background_url: document.getElementById("themeBackground").value || null,
     };
 
-    // Валидация
     if (!themeData.name.trim()) {
         showNotification("Введите название темы", "error");
         return;
@@ -420,25 +417,20 @@ async function deleteTheme(themeId) {
 
 // Горячие клавиши
 document.addEventListener("keydown", function (e) {
-  // Пропускаем если ввод в текстовом поле
   if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
 
-  // Space - play/pause
   if (e.code === "Space") {
     e.preventDefault();
     togglePlay();
   }
-  // Right Arrow - next track
   else if (e.code === "ArrowRight") {
     e.preventDefault();
     playNext();
   }
-  // Left Arrow - previous track
   else if (e.code === "ArrowLeft") {
     e.preventDefault();
     playPrevious();
   }
-  // M - mute/unmute
   else if (e.code === "KeyM") {
     e.preventDefault();
     toggleMute();
@@ -453,7 +445,6 @@ function toggleMute() {
   );
 }
 
-// Инициализация перетаскивания
 function initializeDragAndDrop() {
   const draggableElements = document.querySelectorAll(
     ".desktop-widget, .modal-content"
@@ -465,8 +456,7 @@ function initializeDragAndDrop() {
 }
 
 function startDrag(e) {
-  // Реализация перетаскивания
-  // ... (код из предыдущего ответа)
+
 }
 
 // Автосохранение каждые 30 секунд
@@ -1283,7 +1273,6 @@ function updatePlayerUI(trackData) {
 
   playerCover.classList.add("playing");
 
-  // Обновляем иконку сервиса в плеере
   const serviceIcon = document.getElementById("currentServiceIcon");
   if (serviceIcon) {
     serviceIcon.className =

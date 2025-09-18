@@ -1,12 +1,377 @@
 <!DOCTYPE html>
 <html lang="ru">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>itired - Профиль</title>
     <link rel="stylesheet" href="/static/css/style.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        /* Стили для магазина */
+        .shop-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+        }
+
+        .shop-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .currency-display {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 215, 0, 0.1);
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-weight: bold;
+        }
+
+        .balance {
+            color: #ffd700;
+            font-size: 18px;
+        }
+
+        .categories-nav {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .category-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 20px;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+        }
+
+        .category-btn.active {
+            background: var(--accent);
+            color: white;
+        }
+
+        .shop-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .shop-item {
+            background: var(--bg-tertiary);
+            border-radius: 10px;
+            padding: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .shop-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .item-rarity {
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+            display: inline-block;
+            margin-bottom: 10px;
+        }
+
+        .rarity-common { background: #6c757d; color: white; }
+        .rarity-rare { background: #007bff; color: white; }
+        .rarity-epic { background: #6f42c1; color: white; }
+        .rarity-legendary { background: #fd7e14; color: white; }
+
+        .owned-badge {
+            background: #28a745;
+            color: white;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+            display: inline-block;
+            margin-left: 5px;
+        }
+
+        .item-price {
+            font-size: 18px;
+            font-weight: bold;
+            color: #ffd700;
+            margin: 10px 0;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 100%;
+        }
+
+        .btn-primary:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 100%;
+        }
+
+        /* Баннер профиля */
+        .profile-banner {
+            height: 200px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            margin-bottom: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .banner-overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 20px;
+            background: linear-gradient(transparent, rgba(0,0,0,0.7));
+            color: white;
+        }
+
+        .banner-edit-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            backdrop-filter: blur(10px);
+        }
+
+        /* Вкладки профиля */
+        .profile-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid var(--bg-secondary);
+            padding-bottom: 10px;
+        }
+
+        .profile-tab {
+            padding: 10px 20px;
+            border: none;
+            background: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .profile-tab.active {
+            background: var(--accent);
+            color: white;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Инвентарь */
+        .inventory-section {
+            padding: 20px;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+        }
+
+        .inventory-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .inventory-item {
+            background: var(--bg-tertiary);
+            border-radius: 10px;
+            padding: 15px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .item-icon {
+            width: 50px;
+            height: 50px;
+            background: var(--accent);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        .item-info {
+            flex: 1;
+        }
+
+        .item-info h4 {
+            margin: 0 0 5px 0;
+            color: var(--text-primary);
+        }
+
+        .item-info p {
+            margin: 0;
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .equipped-badge {
+            background: #28a745;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .equip-btn {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        /* Уведомления */
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 8px;
+            color: white;
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            animation: slideIn 0.3s ease;
+        }
+
+        .notification.success { background: #28a745; }
+        .notification.error { background: #dc3545; }
+        .notification.info { background: #17a2b8; }
+        .notification.warning { background: #ffc107; color: #212529; }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        /* Кнопка проверки токена */
+        .validate-btn {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-top: 8px;
+        }
+
+        .validate-btn:hover {
+            background: var(--accent-hover);
+        }
+
+        /* Модальные окна */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            backdrop-filter: blur(5px);
+        }
+
+        .modal-content {
+            background-color: var(--bg-primary);
+            margin: 15% auto;
+            padding: 30px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            position: relative;
+            border: 1px solid var(--bg-secondary);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: var(--text-secondary);
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+
+        /* Загрузка */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+            grid-column: 1 / -1;
+        }
+    </style>
 </head>
 
 <body>
@@ -72,185 +437,253 @@
                 </div>
 
                 <div class="header-actions">
+                    <div class="currency-display">
+                        <span class="balance" id="headerBalance">0</span>
+                        <i class="fas fa-coins" style="color: #ffd700;"></i>
+                    </div>
+                    
                     <button class="action-btn" title="Друзья" onclick="openFriendsModal()">
                         <i class="fas fa-users"></i>
                     </button>
                     <button class="action-btn" title="Настройки" onclick="openModal('settingsModal')">
                         <i class="fas fa-cog"></i>
                     </button>
+                    <button class="action-btn reward-btn" title="Ежедневная награда" onclick="claimDailyReward()">
+                        <i class="fas fa-gift"></i>
+                    </button>
                 </div>
             </header>
 
             <div class="content">
-                <div class="profile-container">
-                    <div class="profile-card">
-                        <div class="profile-header">
-                            <div class="avatar-upload">
-                                <div class="avatar-preview" id="avatarPreview">
-                                    <i class="fas fa-user"></i>
-                                </div>
-                                <input type="file" id="avatarInput" accept="image/*" hidden>
-                                <button class="avatar-edit-btn"
-                                    onclick="document.getElementById('avatarInput').click()">
-                                    <i class="fas fa-camera"></i>
-                                </button>
-                            </div>
-
-                            <div class="profile-info">
-                                <h2 id="profileDisplayName">Загрузка...</h2>
-                                <p id="profileUsername">@username</p>
-
-                                <div class="profile-social">
-                                    <div class="social-stats">
-                                        <div class="stat">
-                                            <span class="stat-number" id="friendsCount">0</span>
-                                            <span class="stat-label">друзей</span>
-                                        </div>
-                                        <div class="stat">
-                                            <span class="stat-number" id="tastesMatch">0%</span>
-                                            <span class="stat-label">совпадение вкусов</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <form id="profileForm" class="profile-form">
-                            <div class="form-section">
-                                <h3>Основная информация</h3>
-
-                                <div class="input-group">
-                                    <label for="display_name">Отображаемое имя</label>
-                                    <input type="text" id="display_name" name="display_name"
-                                        placeholder="Как вас будут видеть другие">
-                                </div>
-
-                                <div class="input-group">
-                                    <label for="bio">О себе</label>
-                                    <textarea id="bio" name="bio" rows="3"
-                                        placeholder="Расскажите о своих музыкальных вкусах..."></textarea>
-                                </div>
-
-                                <div class="input-group">
-                                    <label for="avatar_url">URL аватара</label>
-                                    <input type="url" id="avatar_url" name="avatar_url"
-                                        placeholder="https://example.com/avatar.jpg">
-                                </div>
-                            </div>
-
-                            <div class="form-section">
-                                <h3>Интеграция с Яндекс.Музыкой</h3>
-                                <div class="integration-status" id="yandexStatus">
-                                    <div class="status-loading">
-                                        <i class="fas fa-spinner fa-spin"></i>
-                                        <span>Проверка подключения...</span>
-                                    </div>
-                                </div>
-
-                                <div class="input-group">
-                                    <label for="yandex_token">OAuth Токен Яндекс.Музыки</label>
-                                    <input type="password" id="yandex_token" name="yandex_token"
-                                        placeholder="Введите ваш токен">
-                                    <div class="help-text">
-                                        <a href="https://github.com/MarshalX/yandex-music-token" target="_blank">
-                                            Как получить токен?
-                                        </a>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="form-section">
-                                <h3>Интеграция с VK Музыкой</h3>
-                                <div class="integration-status" id="vkStatus">
-                                    <div class="status-loading">
-                                        <i class="fas fa-spinner fa-spin"></i>
-                                        <span>Проверка подключения...</span>
-                                    </div>
-                                </div>
-
-                                <div class="input-group">
-                                    <label for="vk_token">Токен VK Музыки</label>
-                                    <input type="password" id="vk_token" name="vk_token"
-                                        placeholder="Введите ваш токен VK">
-                                    <div class="help-text">
-                                        <a href="https://vkhost.github.io/" target="_blank">
-                                            Как получить токен VK?
-                                        </a>
-                                        <p>Выберите "Audio", разрешите доступ и скопируйте часть URL после access_token=
-                                            до &expires_in</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="form-actions">
-                                <button type="submit" class="save-btn">
-                                    <i class="fas fa-save"></i> Сохранить изменения
-                                </button>
-                                <button type="button" class="cancel-btn" onclick="window.history.back()">
-                                    Отмена
-                                </button>
-                            </div>
-                        </form>
+            <div class="profile-banner" id="profileBanner">
+                <div class="banner-overlay">
+                    <h2 id="bannerUsername">Загрузка...</h2>
+                    <p id="bannerBio">Музыкальный энтузиаст</p>
+                    
+                    <!-- Контейнер для бейджей -->
+                    <div class="user-badges" id="userBadges">
+                        <!-- Бейджи будут добавляться динамически -->
                     </div>
+                </div>
+                <button class="banner-edit-btn" onclick="openBannerShop()">
+                    <i class="fas fa-camera"></i> Сменить баннер
+                </button>
+            </div>
 
-                    <div class="profile-sidebar">
-                        <div class="info-card">
-                            <h4>Информация об аккаунте</h4>
-                            <div class="info-item">
-                                <span class="info-label">Дата регистрации:</span>
-                                <span class="info-value" id="joinDate">—</span>
-                            </div>
-                            <div class="info-item">
-                                <span class="info-label">Статус:</span>
-                                <span class="info-value premium">Active</span>
-                            </div>
-                            <div class="info-item">
-                                <span class="info-label">Лайкнуто треков:</span>
-                                <span class="info-value" id="totalTracks">0</span>
-                            </div>
-                            <button id="openThemeEditor" class="action-btn">
-                                <i class="fas fa-palette"></i> Редактор тем
-                            </button>
+                <!-- Вкладки профиля -->
+                <div class="profile-tabs">
+                    <button class="profile-tab active" onclick="showTab('main')">Основное</button>
+                    <button class="profile-tab" onclick="showTab('shop')">Магазин</button>
+                    <button class="profile-tab" onclick="showTab('activity')">Активность</button>
+                    <button class="profile-tab" onclick="showTab('inventory')">Инвентарь</button>
+                </div>
 
-                            <button id="changeBackgroundBtn" class="action-btn">
-                                <i class="fas fa-image"></i> Сменить фон
-                            </button>
+                <!-- Основная информация -->
+                <div id="tab-main" class="tab-content active">
+                    <div class="profile-container">
+                        <div class="profile-card">
+                            <div class="profile-header">
+                                <div class="avatar-upload">
+                                    <div class="avatar-preview" id="avatarPreview">
+                                        <i class="fas fa-user"></i>
+                                    </div>
+                                    <input type="file" id="avatarInput" accept="image/*" hidden>
+                                    <button class="avatar-edit-btn" onclick="document.getElementById('avatarInput').click()">
+                                        <i class="fas fa-camera"></i>
+                                    </button>
+                                </div>
+
+                                <div class="profile-info">
+                                    <h2 id="profileDisplayName">Загрузка...</h2>
+                                    <p id="profileUsername">@username</p>
+
+                                    <div class="profile-social">
+                                        <div class="social-stats">
+                                            <div class="stat">
+                                                <span class="stat-number" id="friendsCount">0</span>
+                                                <span class="stat-label">друзей</span>
+                                            </div>
+                                            <div class="stat">
+                                                <span class="stat-number" id="tastesMatch">0%</span>
+                                                <span class="stat-label">совпадение вкусов</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <form id="profileForm" class="profile-form">
+                                <div class="form-section">
+                                    <h3>Основная информация</h3>
+
+                                    <div class="input-group">
+                                        <label for="display_name">Отображаемое имя</label>
+                                        <input type="text" id="display_name" name="display_name"
+                                            placeholder="Как вас будут видеть другие">
+                                    </div>
+
+                                    <div class="input-group">
+                                        <label for="bio">О себе</label>
+                                        <textarea id="bio" name="bio" rows="3"
+                                            placeholder="Расскажите о своих музыкальных вкусах..."></textarea>
+                                    </div>
+
+                                    <div class="input-group">
+                                        <label for="avatar_url">URL аватара</label>
+                                        <input type="url" id="avatar_url" name="avatar_url"
+                                            placeholder="https://example.com/avatar.jpg">
+                                    </div>
+                                </div>
+
+                                <div class="form-section">
+                                    <h3>Интеграция с Яндекс.Музыкой</h3>
+                                    <div class="integration-status" id="yandexStatus">
+                                        <div class="status-loading">
+                                            <i class="fas fa-spinner fa-spin"></i>
+                                            <span>Проверка подключения...</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="input-group">
+                                        <label for="yandex_token">OAuth Токен Яндекс.Музыки</label>
+                                        <input type="password" id="yandex_token" name="yandex_token"
+                                            placeholder="Введите ваш токен">
+                                        <div class="help-text">
+                                            <a href="https://github.com/MarshalX/yandex-music-token" target="_blank">
+                                                Как получить токен?
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="form-section">
+                                    <h3>Интеграция с VK Музыкой</h3>
+                                    <div class="integration-status" id="vkStatus">
+                                        <div class="status-loading">
+                                            <i class="fas fa-spinner fa-spin"></i>
+                                            <span>Проверка подключения...</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="input-group">
+                                        <label for="vk_token">Токен VK Музыки</label>
+                                        <input type="password" id="vk_token" name="vk_token"
+                                            placeholder="Введите ваш токен VK">
+                                        <div class="help-text">
+                                            <a href="https://vkhost.github.io/" target="_blank">
+                                                Как получить токен VK?
+                                            </a>
+                                            <p>Выберите "Audio", разрешите доступ и скопируйте часть URL после access_token=
+                                                до &expires_in</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="form-actions">
+                                    <button type="submit" class="save-btn">
+                                        <i class="fas fa-save"></i> Сохранить изменения
+                                    </button>
+                                    <button type="button" class="cancel-btn" onclick="window.history.back()">
+                                        Отмена
+                                    </button>
+                                </div>
+                            </form>
                         </div>
 
-                        <div class="info-card">
-                            <h4>Музыкальные предпочтения</h4>
-                            <div class="info-item">
-                                <span class="info-label">Любимый жанр:</span>
-                                <span class="info-value" id="topGenre">—</span>
+                        <div class="profile-sidebar">
+                            <div class="info-card">
+                                <h4>Информация об аккаунте</h4>
+                                <div class="info-item">
+                                    <span class="info-label">Дата регистрации:</span>
+                                    <span class="info-value" id="joinDate">—</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">Статус:</span>
+                                    <span class="info-value premium">Active</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">Лайкнуто треков:</span>
+                                    <span class="info-value" id="totalTracks">0</span>
+                                </div>
+                                <button id="openThemeEditor" class="action-btn">
+                                    <i class="fas fa-palette"></i> Редактор тем
+                                </button>
                             </div>
-                            <div class="info-item">
-                                <span class="info-label">Топ исполнитель:</span>
-                                <span class="info-value" id="topArtist">—</span>
-                            </div>
-                        </div>
 
-                        <div class="action-card">
-                            <h4>Социальные действия</h4>
-                            <button class="action-btn full-width" onclick="openFriendsModal()">
-                                <i class="fas fa-users"></i> Мои друзья
-                            </button>
-                            <button class="action-btn full-width" onclick="findMusicFriends()">
-                                <i class="fas fa-search"></i> Найти друзей
-                            </button>
-                            <button class="action-btn full-width" onclick="shareProfile()">
-                                <i class="fas fa-share"></i> Поделиться профилем
-                            </button>
-                            <button class="action-btn full-width danger" onclick="logout()">
-                                <i class="fas fa-sign-out-alt"></i> Выйти
-                            </button>
+                            <div class="info-card">
+                                <h4>Музыкальные предпочтения</h4>
+                                <div class="info-item">
+                                    <span class="info-label">Любимый жанр:</span>
+                                    <span class="info-value" id="topGenre">—</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">Топ исполнитель:</span>
+                                    <span class="info-value" id="topArtist">—</span>
+                                </div>
+                            </div>
+
+                            <div class="action-card">
+                                <h4>Социальные действия</h4>
+                                <button class="action-btn full-width" onclick="openFriendsModal()">
+                                    <i class="fas fa-users"></i> Мои друзья
+                                </button>
+                                <button class="action-btn full-width" onclick="findMusicFriends()">
+                                    <i class="fas fa-search"></i> Найти друзей
+                                </button>
+                                <button class="action-btn full-width" onclick="shareProfile()">
+                                    <i class="fas fa-share"></i> Поделиться профилем
+                                </button>
+                                <button class="action-btn full-width danger" onclick="logout()">
+                                    <i class="fas fa-sign-out-alt"></i> Выйти
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="profile-activity">
-                    <h3>Музыкальная активность</h3>
-                    <div class="activity-feed" id="activityFeed">
-                        <div class="loading">Загрузка активности...</div>
+                <!-- Магазин -->
+                <div id="tab-shop" class="tab-content">
+                    <div class="shop-section">
+                        <div class="shop-header">
+                            <h2><i class="fas fa-store"></i> Магазин предметов</h2>
+                            <div class="currency-display">
+                                <span class="balance" id="userBalance">0</span>
+                                <i class="fas fa-coins"></i>
+                            </div>
+                        </div>
+
+                        <div class="categories-nav">
+                            <button class="category-btn active" data-category="all">Все товары</button>
+                            <button class="category-btn" data-category="themes">Темы</button>
+                            <button class="category-btn" data-category="avatars">Аватары</button>
+                            <button class="category-btn" data-category="banners">Баннеры</button>
+                            <button class="category-btn" data-category="badges">Бейджи</button>
+                            <button class="category-btn" data-category="effects">Эффекты</button>
+                        </div>
+
+                        <div class="shop-grid" id="shopItems">
+                            <div class="loading">Загрузка товаров...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Активность -->
+                <div id="tab-activity" class="tab-content">
+                    <div class="profile-activity">
+                        <h3>Музыкальная активность</h3>
+                        <div class="activity-feed" id="activityFeed">
+                            <div class="loading">Загрузка активности...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Инвентарь -->
+                <div id="tab-inventory" class="tab-content">
+                    <div class="inventory-section">
+                        <h3>Мой инвентарь</h3>
+                        <div class="inventory-grid" id="inventoryGrid">
+                            <div class="loading">Загрузка инвентаря...</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -373,9 +806,30 @@
         </div>
     </div>
 
+    <!-- Модальное окно покупки -->
+    <div id="purchaseModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Подтверждение покупки</h3>
+                <button class="modal-close" onclick="closeModal('purchaseModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Вы уверены, что хотите купить этот товар?</p>
+                <div class="purchase-details">
+                    <h4 id="modalItemName"></h4>
+                    <p class="price">Цена: <span id="modalItemPrice"></span> <i class="fas fa-coins"></i></p>
+                    <p class="balance">Ваш баланс: <span id="purchaseBalance"></span> <i class="fas fa-coins"></i></p>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn-secondary" onclick="closeModal('purchaseModal')">Отмена</button>
+                    <button class="btn-primary" onclick="confirmPurchase()">Купить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <audio id="audioPlayer" hidden></audio>
-
     <script src="/static/js/profile.js"></script>
+    <script src="/static/js/shop.js"></script>
 </body>
-
 </html>

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Админ панель - iTired</title>
+    <link rel="stylesheet" href="/static/css/admin.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="admin-container">
+        <header class="admin-header">
+            <h1><i class="fas fa-cog"></i> Админ панель</h1>
+            <nav class="admin-nav">
+                <button class="nav-btn active" data-tab="stats">Статистика</button>
+                <button class="nav-btn" data-tab="shop">Магазин</button>
+                <button class="nav-btn" data-tab="users">Пользователи</button>
+                <button class="nav-btn" data-tab="currency">Валюта</button>
+            </nav>
+        </header>
+
+        <div class="admin-content">
+            
+            <div class="tab-content active" id="statsTab">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>Пользователи</h3>
+                        <span class="stat-number" id="totalUsers">0</span>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Транзакции</h3>
+                        <span class="stat-number" id="totalTransactions">0</span>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Товары</h3>
+                        <span class="stat-number" id="totalItems">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Вкладка управления магазином -->
+            <div class="tab-content" id="shopTab">
+                <div class="admin-section">
+                    <h3>Управление товарами</h3>
+                    <button class="btn-primary" onclick="showAddItemForm()">
+                        <i class="fas fa-plus"></i> Добавить товар
+                    </button>
+                    
+                    <div class="items-list" id="adminItemsList">
+                       
+                    </div>
+                </div>
+
+                <div class="admin-section">
+                    <h3>Добавить товар</h3>
+                    <form id="addItemForm" class="hidden">
+                        <input type="text" name="name" placeholder="Название товара" required>
+                        <select name="type" required>
+                            <option value="">Выберите тип</option>
+                            <option value="theme">Тема</option>
+                            <option value="avatar">Аватар</option>
+                            <option value="badge">Бейдж</option>
+                            <option value="banner">Баннер</option>
+                        </select>
+                        <input type="number" name="price" placeholder="Цена" required>
+                        <textarea name="data" placeholder="JSON данные товара"></textarea>
+                        <button type="submit">Добавить</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Вкладка управления валютой -->
+            <div class="tab-content" id="currencyTab">
+                <div class="admin-section">
+                    <h3>Выдать валюту</h3>
+                    <form id="addCurrencyForm">
+                        <input type="text" name="username" placeholder="Имя пользователя" required>
+                        <input type="number" name="amount" placeholder="Количество" required>
+                        <input type="text" name="reason" placeholder="Причина">
+                        <button type="submit">Выдать</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/admin.js"></script>
+</body>
+</html>

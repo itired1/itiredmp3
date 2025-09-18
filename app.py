@@ -24,14 +24,210 @@ from collections import Counter
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_caching import Cache
+from models import db, User, UserCurrency, ShopCategory, ShopItem, UserInventory, CurrencyTransaction
 
-# Настройка логирования
-logging.basicConfig(level=logging.INFO)
+
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', secrets.token_hex(32))
 app.permanent_session_lifetime = timedelta(days=30)
+
+
+limiter = Limiter(app)
+limiter.key_func = get_remote_address
+cache = Cache(app, config={'CACHE_TYPE': 'SimpleCache', 'CACHE_DEFAULT_TIMEOUT': 300})
+
+# Конфигурация базы данных
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///itired.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db.init_app(app)
+
+# Инициализация базы данных
+def init_database():
+    try:
+        with app.app_context():
+
+            db.create_all()
+            
+            init_db() 
+            
+            init_shop_data()
+            create_admin_user()
+            logger.info("Database initialized successfully")
+    except Exception as e:
+        logger.error(f"Database initialization error: {e}")
+def init_shop_data():
+    """Инициализация магазина начальными данными"""
+    try:
+
+        categories = [
+            ('themes', 'Темы оформления', 'fas fa-palette'),
+            ('avatars', 'Аватары', 'fas fa-user'),
+            ('banners', 'Баннеры профиля', 'fas fa-image'),
+            ('badges', 'Бейджи', 'fas fa-medal'),
+            ('effects', 'Эффекты плеера', 'fas fa-magic'),
+            ('animations', 'Анимации', 'fas fa-film')
+        ]
+        
+        for cat_name, cat_desc, cat_icon in categories:
+            category = ShopCategory.query.filter_by(name=cat_name).first()
+            if not category:
+                category = ShopCategory(
+                    name=cat_name,
+                    description=cat_desc,
+                    icon=cat_icon
+                )
+                db.session.add(category)
+        
+        db.session.commit()
+        
+
+        shop_items = [
+            ('Темная тема Premium', 'theme', 'themes', 50, 
+             '{"styles": {"--bg-primary": "#0a0a0a", "--bg-secondary": "#141414", "--accent": "#ff6b6b", "--text-primary": "#ffffff"}}', 'rare'),
+            
+            ('Синяя тема Ocean', 'theme', 'themes', 40,
+             '{"styles": {"--bg-primary": "#0a1929", "--bg-secondary": "#132f4c", "--accent": "#1976d2", "--text-primary": "#e3f2fd"}}', 'common'),
+            
+            ('Аватар "Звезда"', 'avatar', 'avatars', 20,
+             '{"image_url": "/static/shop/avatars/star.png", "unlockable": true}', 'common'),
+            
+            ('Аватар "Лунный свет"', 'avatar', 'avatars', 25,
+             '{"image_url": "/static/shop/avatars/moon.png", "unlockable": true}', 'common'),
+            
+            ('Баннер "Г"', 'profile_banner', 'banners', 40,
+             '{"image_url": "/static/shop/banners/xz2.jpg", "preview": "/static/shop/banners/xz2.jpg"}', 'common'),
+            ('Баннер "Огненный дракон"', 'profile_banner', 'banners', 120,
+             '{"image_url": "/static/shop/banners/kruto.gif", "preview": "/static/shop/banners/kruto.gif", "animation": "gif"}', 'legendary'),
+            ('Баннер "zxc"', 'profile_banner', 'banners', 120,
+             '{"image_url": "/static/shop/banners/kruto1.gif", "preview": "/static/shop/banners/kruto1.gif", "animation": "gif"}', 'legendary'),
+            ('Баннер "вас крутой"', 'profile_banner', 'banners', 120,
+             '{"image_url": "/static/shop/banners/kruto2.gif", "preview": "/static/shop/banners/kruto2.gif", "animation": "gif"}', 'legendary'),
+            ('Баннер "крутой вас"', 'profile_banner', 'banners', 120,
+             '{"image_url": "/static/shop/banners/kruto3.gif", "preview": "/static/shop/banners/kruto3.gif", "animation": "gif"}', 'legendary'),
+            ('Баннер "крутой"', 'profile_banner', 'banners', 120,
+             '{"image_url": "/static/shop/banners/kruto.gif", "preview": "/static/shop/banners/kruto.gif", "animation": "gif"}', 'legendary'),
+
+            ('Баннер "К"', 'profile_banner', 'banners', 45,
+             '{"image_url": "/static/shop/banners/xz1.jpg", "preview": "/static/shop/banners/xz1.jpg"}', 'rare'),
+
+            ('Баннер "Г"', 'profile_banner', 'banners', 35,
+             '{"image_url": "/static/shop/banners/xz.jpg", "preview": "/static/shop/banners/xz.jpg"}', 'common'),
+            
+            ('Бейдж "Меломан"', 'badge', 'badges', 15,
+             '{"text": "🎵 Меломан", "color": "#ff6b6b", "animation": "pulse"}', 'common'),
+            
+            ('Бейдж "VIP"', 'badge', 'badges', 30,
+             '{"text": "⭐ VIP", "color": "#ffd700", "animation": "glow"}', 'rare'),
+            
+            ('Эффект "Неоновое сияние"', 'effect', 'effects', 75,
+             '{"css": ".player { filter: drop-shadow(0 0 10px #ff00ff); }", "duration": 30000}', 'epic'),
+            
+            ('Анимация "Вращение"', 'animation', 'animations', 45,
+             '{"css": "@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }", "element": ".album-cover"}', 'rare')
+        ]
+        
+        for name, item_type, category_name, price, data, rarity in shop_items:
+            category = ShopCategory.query.filter_by(name=category_name).first()
+            if category:
+                item = ShopItem.query.filter_by(name=name).first()
+                if not item:
+                    item = ShopItem(
+                        name=name,
+                        type=item_type,
+                        category_id=category.id,
+                        price=price,
+                        data=data,
+                        rarity=rarity
+                    )
+                    db.session.add(item)
+        
+        db.session.commit()
+        logger.info("Shop data initialized successfully")
+        
+    except Exception as e:
+        logger.error(f"Error initializing shop data: {e}")
+
+def get_user_currency_balance(user_id):
+    currency = UserCurrency.query.filter_by(user_id=user_id).first()
+    return currency.balance if currency else 0
+
+def can_afford_item(user_id, item_price):
+    balance = get_user_currency_balance(user_id)
+    return balance >= item_price
+
+def get_equipped_items(user_id):
+    inventory = UserInventory.query.filter_by(
+        user_id=user_id, equipped=True
+    ).all()
+    
+    equipped_items = {}
+    for inv_item in inventory:
+        equipped_items[inv_item.item.type] = {
+            'item_id': inv_item.item_id,
+            'data': json.loads(inv_item.item.data) if inv_item.item.data else {}
+        }
+    
+    return equipped_items
+
+def create_admin_user():
+    try:
+        admin_user = User.query.filter_by(username='admin').first()
+        if not admin_user:
+            admin_user = User(
+                username='admin',
+                email='admin@itired.com',
+                password_hash=bcrypt.hashpw('admin123'.encode('utf-8'), bcrypt.gensalt()).decode('utf-8'),
+                is_admin=True
+            )
+            db.session.add(admin_user)
+            db.session.commit()
+            logger.info("Admin user created: admin / admin123")
+    except Exception as e:
+        logger.error(f"Error creating admin user: {e}")
+
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        user = get_current_user()
+        if not user or not user[10]: 
+            return jsonify({'error': 'Требуются права администратора'}), 403
+        return f(*args, **kwargs)
+    return decorated_function
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return jsonify({'error': 'Требуется авторизация'}), 401
+        return f(*args, **kwargs)
+    return decorated_function
+
+def add_currency(user_id, amount, reason):
+    try:
+        currency = UserCurrency.query.filter_by(user_id=user_id).first()
+        
+        if currency:
+            currency.balance += amount
+        else:
+            currency = UserCurrency(user_id=user_id, balance=amount)
+            db.session.add(currency)
+        
+        transaction = CurrencyTransaction(
+            user_id=user_id,
+            amount=amount,
+            reason=reason
+        )
+        db.session.add(transaction)
+        db.session.commit()
+        
+        return True
+    except Exception as e:
+        logger.error(f"Error adding currency: {e}")
+        db.session.rollback()
+        return False
 
 DATABASE = 'itired.db'
 UPLOAD_FOLDER = 'static/uploads/avatars'
@@ -43,12 +239,6 @@ EMAIL_CONFIG = {
     'email': 'itiredmp3@gmail.com',
     'password': 'ozbg ahqs jack lerf'
 }
-
-limiter = Limiter(app)
-limiter.key_func = get_remote_address
-
-cache = Cache(config={'CACHE_TYPE': 'SimpleCache', 'CACHE_DEFAULT_TIMEOUT': 300})
-cache.init_app(app)
 
 def adapt_datetime(dt):
     return dt.isoformat()
@@ -147,6 +337,7 @@ def init_db():
                 FOREIGN KEY (user_id) REFERENCES users (id)
             )
         ''')
+        
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS user_themes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -160,15 +351,8 @@ def init_db():
             )
         ''')
         
+        
         db.commit()
-
-def login_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            return jsonify({'error': 'Требуется авторизация'}), 401
-        return f(*args, **kwargs)
-    return decorated_function
 
 def get_current_user():
     if 'user_id' in session:
@@ -178,6 +362,10 @@ def get_current_user():
         user = cursor.fetchone()
         return user
     return None
+
+def get_current_user_id():
+    user = get_current_user()
+    return user[0] if user else None
 
 def get_yandex_client(user_id=None):
     try:
@@ -230,7 +418,7 @@ def get_current_music_service(user_id=None):
     db = get_db()
     cursor = db.cursor()
     if not user_id:
-        user_id = session.get('user_id')
+        user_id = get_current_user_id()
     
     cursor.execute('SELECT music_service FROM user_settings WHERE user_id = ?', (user_id,))
     setting = cursor.fetchone()
@@ -297,7 +485,7 @@ class EnhancedRecommender:
     def __init__(self):
         pass
     
-    def get_enhanced_recommendations(self, user_id, service='yandex'):  # Убрали async
+    def get_enhanced_recommendations(self, user_id, service='yandex'):
         """Получение рекомендаций из нескольких источников"""
         recommendations = []
         
@@ -305,34 +493,29 @@ class EnhancedRecommender:
             if service == 'yandex':
                 client = get_yandex_client(user_id)
                 if client:
-                    # 1. Рекомендации на основе истории прослушивания
-                    history_recs = self._get_history_based_recommendations(user_id, client)  # Убрали await
+                    history_recs = self._get_history_based_recommendations(user_id, client)
                     recommendations.extend(history_recs)
                     
-                    # 2. Похожие на любимые треки
-                    liked_recs = self._get_liked_based_recommendations(user_id, client)  # Убрали await
+                    liked_recs = self._get_liked_based_recommendations(user_id, client)
                     recommendations.extend(liked_recs)
                     
-                    # 3. Новые релизы и чарты как fallback
                     if not recommendations:
-                        fallback_recs = self._get_fallback_recommendations(client)  # Убрали await
+                        fallback_recs = self._get_fallback_recommendations(client)
                         recommendations.extend(fallback_recs)
             
             elif service == 'vk':
                 vk_client = get_vk_client(user_id)
                 if vk_client:
-                    vk_recs = self._get_vk_recommendations(vk_client)  # Убрали await
+                    vk_recs = self._get_vk_recommendations(vk_client)
                     recommendations.extend(vk_recs)
             
-            # Убираем дубликаты и перемешиваем
             return self._deduplicate_and_shuffle(recommendations)
             
         except Exception as e:
             logger.error(f"Enhanced recommendations error: {e}")
             return []
     
-    def _get_history_based_recommendations(self, user_id, client):  # Убрали async
-        """Рекомендации на основе истории прослушивания"""
+    def _get_history_based_recommendations(self, user_id, client):
         try:
             # Получаем историю прослушивания из базы
             db = get_db()
@@ -355,27 +538,24 @@ class EnhancedRecommender:
             if not history_tracks:
                 return []
             
-            # Анализируем историю для рекомендаций
             recommendations = []
             
-            # Поиск по жанрам из истории
             genres = self._extract_genres_from_history(history_tracks)
             if genres:
-                for genre in genres[:2]:  # Берем 2 самых частых жанра
+                for genre in genres[:2]: 
                     try:
-                        search_results = client.search(f"жанр:{genre}", type_='track')  # Убрали await
+                        search_results = client.search(f"жанр:{genre}", type_='track')
                         if search_results and search_results.tracks:
                             for track in search_results.tracks.results[:2]:
                                 recommendations.append(self._format_track(track, 'history_genre'))
                     except:
                         continue
             
-            # Поиск по артистам из истории
             artists = self._extract_artists_from_history(history_tracks)
             if artists:
-                for artist in artists[:2]:  # Берем 2 самых частых артиста
+                for artist in artists[:2]:
                     try:
-                        search_results = client.search(artist, type_='track')  # Убрали await
+                        search_results = client.search(artist, type_='track')
                         if search_results and search_results.tracks:
                             for track in search_results.tracks.results[:2]:
                                 if not any(t['id'] == f"yandex_{track.id}" for t in recommendations):
@@ -389,10 +569,9 @@ class EnhancedRecommender:
             logger.error(f"History based recommendations error: {e}")
             return []
     
-    def _get_liked_based_recommendations(self, user_id, client):  # Убрали async
-        """Рекомендации на основе лайкнутых треков"""
+    def _get_liked_based_recommendations(self, user_id, client):
         try:
-            liked_tracks = client.users_likes_tracks()  # Убрали await
+            liked_tracks = client.users_likes_tracks()
             if not liked_tracks:
                 return []
             
@@ -403,11 +582,11 @@ class EnhancedRecommender:
             
             for track_short in sample_tracks:
                 try:
-                    track = track_short.fetch_track()  # Убрали await
+                    track = track_short.fetch_track()
                     
                     # Ищем похожие треки
                     search_query = f"{track.title} {track.artists[0].name if track.artists else ''}"
-                    similar_tracks = client.search(search_query, type_='track')  # Убрали await
+                    similar_tracks = client.search(search_query, type_='track')
                     
                     if similar_tracks and similar_tracks.tracks:
                         for similar in similar_tracks.tracks.results[:2]:
@@ -424,13 +603,11 @@ class EnhancedRecommender:
             logger.error(f"Liked based recommendations error: {e}")
             return []
     
-    def _get_fallback_recommendations(self, client):  # Убрали async
-        """Fallback рекомендации (новые релизы и чарты)"""
+    def _get_fallback_recommendations(self, client):
         recommendations = []
         
         try:
-            # Новые релизы
-            new_releases = client.new_releases()  # Убрали await
+            new_releases = client.new_releases()
             if new_releases and hasattr(new_releases, 'new_releases'):
                 for album in new_releases.new_releases[:3]:
                     recommendations.append({
@@ -441,9 +618,7 @@ class EnhancedRecommender:
                         'cover_uri': f"https://{album.cover_uri.replace('%%', '300x300')}" if hasattr(album, 'cover_uri') and album.cover_uri else None,
                         'source': 'new_releases'
                     })
-            
-            # Чарты
-            chart = client.chart('world')  # Убрали await
+            chart = client.chart('world')
             if chart and hasattr(chart, 'chart') and chart.chart.tracks:
                 for track in chart.chart.tracks[:3]:
                     recommendations.append(self._format_track(track, 'chart'))
@@ -453,11 +628,10 @@ class EnhancedRecommender:
         
         return recommendations
     
-    def _get_vk_recommendations(self, vk_client):  # Убрали async
-        """Рекомендации для VK музыки"""
+    def _get_vk_recommendations(self, vk_client):
         try:
             recommendations = []
-            vk_recs = vk_client.audio.getRecommendations(count=6)  # Убрали await
+            vk_recs = vk_client.audio.getRecommendations(count=6)
             
             if 'items' in vk_recs:
                 for track in vk_recs['items']:
@@ -478,16 +652,13 @@ class EnhancedRecommender:
             return []
     
     def _extract_genres_from_history(self, history_tracks):
-        """Извлечение жанров из истории прослушивания"""
         genres = []
         for track in history_tracks:
             if 'genre' in track:
                 genres.append(track['genre'])
-            # Можно добавить дополнительную логику для определения жанра
         return [genre for genre, count in Counter(genres).most_common() if genre]
     
     def _extract_artists_from_history(self, history_tracks):
-        """Извлечение артистов из истории прослушивания"""
         artists = []
         for track in history_tracks:
             if 'artists' in track and track['artists']:
@@ -495,7 +666,6 @@ class EnhancedRecommender:
         return [artist for artist, count in Counter(artists).most_common(5)]
     
     def _format_track(self, track, source):
-        """Форматирование трека в стандартный формат"""
         cover_uri = None
         if hasattr(track, 'cover_uri') and track.cover_uri:
             cover_uri = f"https://{track.cover_uri.replace('%%', '300x300')}"
@@ -512,7 +682,6 @@ class EnhancedRecommender:
         }
     
     def _deduplicate_and_shuffle(self, recommendations):
-        """Удаление дубликатов и перемешивание рекомендаций"""
         seen_ids = set()
         unique_recommendations = []
         
@@ -522,12 +691,12 @@ class EnhancedRecommender:
                 unique_recommendations.append(rec)
         
         random.shuffle(unique_recommendations)
-        return unique_recommendations[:6]  # Возвращаем не более 6 рекомендаций
+        return unique_recommendations[:8]  
 
-# Глобальный экземпляр рекомендателя
 recommender = EnhancedRecommender()
 
 init_db()
+init_database()
 
 @app.route('/')
 def index():
@@ -631,6 +800,7 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
+
         
         if not username or not password:
             return render_template('auth.html', mode='login', error='Введите имя пользователя и пароль')
@@ -665,6 +835,303 @@ def login():
         return redirect(url_for('index'))
     
     return render_template('auth.html', mode='login')
+
+
+@app.route('/api/currency/balance')
+@login_required
+def get_currency_balance():
+    try:
+        user_id = get_current_user_id()
+        if not user_id:
+            return jsonify({'error': 'User not found'}), 404
+            
+        currency = UserCurrency.query.filter_by(user_id=user_id).first()
+        balance = currency.balance if currency else 0
+        return jsonify({'balance': balance})
+    except Exception as e:
+        logger.error(f"Currency balance error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/shop/items')
+@login_required
+def get_shop_items():
+    try:
+        user = User.get_current()
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        items = ShopItem.query.all()
+        
+        user_items = user.get_inventory()
+        owned_item_ids = [ui.item_id for ui in user_items]
+        
+        result = []
+        for item in items:
+            result.append({
+                'id': item.id,
+                'name': item.name,
+                'type': item.type,
+                'category': item.category.name if item.category else 'unknown',
+                'price': item.price,
+                'data': item.get_data_dict(),
+                'rarity': item.rarity,
+                'owned': item.id in owned_item_ids
+            })
+        
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Shop items error: {e}")
+        return jsonify({'error': str(e)}), 500
+        
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Shop items error: {e}")
+        return jsonify({'error': str(e)}), 500
+@app.route('/api/shop/buy/<int:item_id>', methods=['POST'])
+@login_required
+def buy_shop_item(item_id):
+    try:
+        user_id = get_current_user_id()
+        if not user_id:
+            return jsonify({'error': 'User not found'}), 404
+            
+        item = ShopItem.query.get_or_404(item_id)
+        
+        if not item.is_active:
+            return jsonify({'success': False, 'message': 'Товар недоступен'}), 400
+        
+        currency = UserCurrency.query.filter_by(user_id=user_id).first()
+        balance = currency.balance if currency else 0
+        
+        if balance < item.price:
+            return jsonify({'success': False, 'message': 'Недостаточно средств'}), 400
+        
+        existing_inventory = UserInventory.query.filter_by(
+            user_id=user_id, item_id=item_id
+        ).first()
+        
+        if existing_inventory:
+            return jsonify({'success': False, 'message': 'Товар уже куплен'}), 400
+        
+        if currency:
+            currency.balance -= item.price
+        else:
+            currency = UserCurrency(user_id=user_id, balance=-item.price)
+            db.session.add(currency)
+        
+        transaction = CurrencyTransaction(
+            user_id=user_id,
+            amount=-item.price,
+            reason=f'purchase_{item.name}'
+        )
+        db.session.add(transaction)
+        
+        inventory = UserInventory(
+            user_id=user_id,
+            item_id=item_id
+        )
+        db.session.add(inventory)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True, 
+            'message': 'Покупка совершена успешно',
+            'new_balance': currency.balance
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Buy item error: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/profile/equip/<int:item_id>', methods=['POST'])
+@login_required
+def equip_item(item_id):
+    try:
+        user_id = get_current_user_id()
+        if not user_id:
+            return jsonify({'error': 'User not found'}), 404
+        
+        inventory_item = UserInventory.query.filter_by(
+            user_id=user_id, item_id=item_id
+        ).first()
+        
+        if not inventory_item:
+            return jsonify({'success': False, 'message': 'Товар не куплен'}), 400
+        
+        item = ShopItem.query.get_or_404(item_id)
+        
+        same_type_items = db.session.query(UserInventory).join(
+            ShopItem, UserInventory.item_id == ShopItem.id
+        ).filter(
+            UserInventory.user_id == user_id,
+            ShopItem.type == item.type
+        ).all()
+        
+        for inv_item in same_type_items:
+            inv_item.equipped = False
+        
+        inventory_item.equipped = True
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Предмет применен'})
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Equip item error: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/profile/inventory')
+@login_required
+def get_user_inventory():
+    try:
+        user = User.get_current()
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        inventory = user.get_inventory()
+        
+        result = []
+        for inv in inventory:
+            result.append({
+                'id': inv.item.id,
+                'name': inv.item.name,
+                'type': inv.item.type,
+                'price': inv.item.price,
+                'data': inv.item.get_data_dict(),
+                'equipped': inv.equipped,
+                'purchased_at': inv.purchased_at.isoformat() if inv.purchased_at else None
+            })
+        
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Inventory error: {e}")
+        return jsonify({'error': str(e)}), 500
+@app.route('/api/admin/add_currency', methods=['POST'])
+@login_required
+@admin_required
+def admin_add_currency():
+    try:
+        data = request.get_json()
+        username = data.get('username')
+        amount = data.get('amount', 0)
+        reason = data.get('reason', 'admin_grant')
+        
+        if not username or amount <= 0:
+            return jsonify({'success': False, 'message': 'Неверные параметры'}), 400
+        
+        target_user = User.query.filter_by(username=username).first()
+        if not target_user:
+            return jsonify({'success': False, 'message': 'Пользователь не найден'}), 404
+        
+        currency = UserCurrency.query.filter_by(user_id=target_user.id).first()
+        if currency:
+            currency.balance += amount
+        else:
+            currency = UserCurrency(user_id=target_user.id, balance=amount)
+            db.session.add(currency)
+        
+        transaction = CurrencyTransaction(
+            user_id=target_user.id,
+            amount=amount,
+            reason=reason
+        )
+        db.session.add(transaction)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Добавлено {amount} валюты пользователю {username}'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/admin/shop/add_item', methods=['POST'])
+@login_required
+@admin_required
+def admin_add_shop_item():
+    try:
+        data = request.get_json()
+        
+        required_fields = ['name', 'type', 'category', 'price']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'success': False, 'message': f'Отсутствует поле: {field}'}), 400
+        
+        category = ShopCategory.query.filter_by(name=data['category']).first()
+        if not category:
+            return jsonify({'success': False, 'message': 'Категория не найдена'}), 404
+        
+        new_item = ShopItem(
+            name=data['name'],
+            type=data['type'],
+            category_id=category.id,
+            price=data['price'],
+            data=json.dumps(data.get('data', {})),
+            rarity=data.get('rarity', 'common'),
+            is_active=data.get('is_active', True)
+        )
+        
+        db.session.add(new_item)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Товар добавлен',
+            'item_id': new_item.id
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/admin/shop/categories', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def manage_shop_categories():
+    try:
+        if request.method == 'GET':
+            categories = ShopCategory.query.filter_by(is_active=True).all()
+            return jsonify([{
+                'id': cat.id,
+                'name': cat.name,
+                'description': cat.description,
+                'icon': cat.icon
+            } for cat in categories])
+        
+        elif request.method == 'POST':
+            data = request.get_json()
+            
+            new_category = ShopCategory(
+                name=data['name'],
+                description=data.get('description', ''),
+                icon=data.get('icon', 'fas fa-box'),
+                is_active=data.get('is_active', True)
+            )
+            
+            db.session.add(new_category)
+            db.session.commit()
+            
+            return jsonify({
+                'success': True,
+                'message': 'Категория создана',
+                'category_id': new_category.id
+            })
+            
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/admin')
+@login_required
+def admin_panel():
+    user = get_current_user()
+    if not user or not user[10]: 
+        return redirect(url_for('index'))
+    return render_template('admin_panel.html')
 
 @app.route('/logout')
 def logout():
@@ -923,13 +1390,12 @@ def save_token():
 
 @app.route('/api/recommendations')
 @login_required
-def get_recommendations():  # Убрали async
+def get_recommendations():
     try:
-        user = get_current_user()
-        service = get_current_music_service(user[0])
+        user_id = get_current_user_id()
+        service = get_current_music_service(user_id)
         
-        # Используем улучшенную систему рекомендаций
-        recommendations = recommender.get_enhanced_recommendations(user[0], service)  # Убрали await
+        recommendations = recommender.get_enhanced_recommendations(user_id, service)
         
         return jsonify(recommendations)
     except Exception as e:
@@ -938,22 +1404,24 @@ def get_recommendations():  # Убрали async
 
 @app.route('/api/playlists')
 @login_required
-@cache.cached(timeout=600, key_prefix=lambda: f'playlists_{session["user_id"]}')
 def get_playlists():
     try:
-        user = get_current_user()
-        service = get_current_music_service(user[0])
+        user_id = get_current_user_id()
+        service = get_current_music_service(user_id)
         
         result = []
         
         if service == 'yandex':
-            client = get_yandex_client(user[0])
+            client = get_yandex_client(user_id)
             if not client:
                 return jsonify({'error': 'Токен Яндекс.Музыки не настроен'}), 400
             
             playlists = client.users_playlists_list()
             
             for playlist in playlists:
+                if hasattr(playlist, 'collective') and playlist.collective:
+                    continue
+                    
                 cover_uri = None
                 if hasattr(playlist, 'cover') and playlist.cover:
                     if hasattr(playlist.cover, 'uri') and playlist.cover.uri:
@@ -978,7 +1446,7 @@ def get_playlists():
                 })
         
         elif service == 'vk':
-            vk_client = get_vk_client(user[0])
+            vk_client = get_vk_client(user_id)
             if not vk_client:
                 return jsonify({'error': 'Токен VK не настроен'}), 400
             
@@ -986,6 +1454,9 @@ def get_playlists():
                 playlists = vk_client.audio.getPlaylists()
                 if 'items' in playlists:
                     for playlist in playlists['items']:
+                        if playlist.get('is_following') or playlist.get('owner_id') != user_id:
+                            continue
+                            
                         result.append({
                             'id': f"vk_{playlist['id']}",
                             'title': playlist['title'],
@@ -1003,15 +1474,14 @@ def get_playlists():
     except Exception as e:
         logger.error(f"Playlists error: {e}")
         return jsonify({'error': str(e)}), 500
-
 @app.route('/api/playlist/<service>_<int:playlist_id>')
 @login_required
 def get_playlist(service, playlist_id):
     try:
-        user = get_current_user()
+        user_id = get_current_user_id()
         
         if service == 'yandex':
-            client = get_yandex_client(user[0])
+            client = get_yandex_client(user_id)
             if not client:
                 return jsonify({'error': 'Токен Яндекс.Музыки не настроен'}), 400
             
@@ -1056,7 +1526,7 @@ def get_playlist(service, playlist_id):
             })
         
         elif service == 'vk':
-            vk_client = get_vk_client(user[0])
+            vk_client = get_vk_client(user_id)
             if not vk_client:
                 return jsonify({'error': 'Токен VK не настроен'}), 400
             
@@ -1102,13 +1572,13 @@ def get_playlist(service, playlist_id):
 @login_required
 def get_liked_tracks():
     try:
-        user = get_current_user()
-        service = get_current_music_service(user[0])
+        user_id = get_current_user_id()
+        service = get_current_music_service(user_id)
         
         tracks = []
         
         if service == 'yandex':
-            client = get_yandex_client(user[0])
+            client = get_yandex_client(user_id)
             if not client:
                 return jsonify({'error': 'Токен Яндекс.Музыки не настроен'}), 400
             
@@ -1135,7 +1605,7 @@ def get_liked_tracks():
                     continue
         
         elif service == 'vk':
-            vk_client = get_vk_client(user[0])
+            vk_client = get_vk_client(user_id)
             if not vk_client:
                 return jsonify({'error': 'Токен VK не настроен'}), 400
             
@@ -1164,14 +1634,14 @@ def get_liked_tracks():
 
 @app.route('/api/stats')
 @login_required
-@cache.cached(timeout=1800, key_prefix=lambda: f'stats_{session["user_id"]}')
+#@cache.cached(timeout=1800, key_prefix=lambda: f'stats_{session["user_id"]}')
 def get_stats():
     try:
-        user = get_current_user()
-        service = get_current_music_service(user[0])
+        user_id = get_current_user_id()
+        service = get_current_music_service(user_id)
         
         if service == 'yandex':
-            client = get_yandex_client(user[0])
+            client = get_yandex_client(user_id)
             if not client:
                 return jsonify({'error': 'Токен Яндекс.Музыки не настроен'}), 400
             
@@ -1213,7 +1683,7 @@ def get_stats():
             return jsonify(stats)
         
         elif service == 'vk':
-            vk_client = get_vk_client(user[0])
+            vk_client = get_vk_client(user_id)
             if not vk_client:
                 return jsonify({'error': 'Токен VK не настроен'}), 400
             
@@ -1254,13 +1724,38 @@ def get_stats():
     except Exception as e:
         logger.error(f"Stats error: {e}")
         return jsonify({'error': str(e)}), 500
-
+@app.route('/api/profile/equipped')
+@login_required
+def get_equipped_items():
+    try:
+        user = User.get_current()
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        inventory = UserInventory.query.filter_by(
+            user_id=user.id, equipped=True
+        ).all()
+        
+        equipped_items = {}
+        for inv_item in inventory:
+            equipped_items[inv_item.item.type] = {
+                'item_id': inv_item.item_id,
+                'name': inv_item.item.name,
+                'type': inv_item.item.type,
+                'data': inv_item.item.get_data_dict(),
+                'purchased_at': inv_item.purchased_at.isoformat() if inv_item.purchased_at else None
+            }
+        
+        return jsonify(equipped_items)
+    except Exception as e:
+        logger.error(f"Equipped items error: {e}")
+        return jsonify({'error': str(e)}), 500
 @app.route('/api/search')
 @login_required
 def search():
     try:
-        user = get_current_user()
-        service = get_current_music_service(user[0])
+        user_id = get_current_user_id()
+        service = get_current_music_service(user_id)
         query = request.args.get('q', '')
         
         if not query:
@@ -1269,7 +1764,7 @@ def search():
         result = {'tracks': [], 'albums': [], 'artists': [], 'playlists': []}
         
         if service == 'yandex':
-            client = get_yandex_client(user[0])
+            client = get_yandex_client(user_id)
             if not client:
                 return jsonify({'error': 'Токен Яндекс.Музыки не настроен'}), 400
             
@@ -1332,7 +1827,7 @@ def search():
                     })
         
         elif service == 'vk':
-            vk_client = get_vk_client(user[0])
+            vk_client = get_vk_client(user_id)
             if not vk_client:
                 return jsonify({'error': 'Токен VK не настроен'}), 400
             
@@ -1363,66 +1858,65 @@ def search():
 @login_required
 def get_track_url(service, track_id):
     try:
-        user = get_current_user()
+        user_id = get_current_user_id()
         
         if service == 'yandex':
-            client = get_yandex_client(user[0])
+            client = get_yandex_client(user_id)
             if not client:
                 return jsonify({'error': 'Токен Яндекс.Музыки не настроен'}), 400
             
             track = client.tracks(track_id)[0]
+            
             download_info = track.get_download_info()
             
-            if download_info:
-                best_quality = max(download_info, key=lambda x: x.bitrate_in_kbps)
-                download_url = best_quality.get_direct_link()
-                
-                # Сохраняем в историю прослушивания
-                db = get_db()
-                cursor = db.cursor()
-                
-                track_data = {
-                    'title': track.title,
-                    'artists': [artist.name for artist in track.artists],
-                    'album': track.albums[0].title if track.albums else 'Unknown Album',
-                    'genre': track.albums[0].genre if track.albums and track.albums[0].genre else 'Unknown',
-                    'duration': track.duration_ms,
-                    'cover_uri': f"https://{track.cover_uri.replace('%%', '300x300')}" if track.cover_uri else None
-                }
-                
-                # Сохраняем в историю прослушивания
-                cursor.execute(
-                    'INSERT INTO listening_history (user_id, track_id, track_data) VALUES (?, ?, ?)',
-                    (user[0], f"yandex_{track_id}", json.dumps(track_data))
-                )
-                
-                # Сохраняем в общую активность
-                activity_data = json.dumps({
-                    'track': track.title,
-                    'artist': ', '.join([artist.name for artist in track.artists]),
-                    'track_id': f"yandex_{track_id}",
-                    'service': 'yandex'
-                })
-                cursor.execute(
-                    'INSERT INTO user_activity (user_id, activity_type, activity_data) VALUES (?, ?, ?)',
-                    (user[0], 'listen', activity_data)
-                )
-                
-                db.commit()
-                
-                return jsonify({
-                    'url': download_url,
-                    'title': track.title,
-                    'artists': [artist.name for artist in track.artists],
-                    'duration': track.duration_ms,
-                    'cover_uri': track_data['cover_uri'],
-                    'service': 'yandex'
-                })
+            if not download_info:
+                return jsonify({'error': 'Не удалось получить информацию для скачивания'}), 404
             
-            return jsonify({'error': 'Не удалось получить ссылку на трек'}), 404
+            best_quality = max(download_info, key=lambda x: x.bitrate_in_kbps)
+            download_url = best_quality.get_direct_link()
+            
+            track_data = {
+                'title': track.title,
+                'artists': [artist.name for artist in track.artists],
+                'album': track.albums[0].title if track.albums else 'Unknown Album',
+                'genre': track.albums[0].genre if track.albums and track.albums[0].genre else 'Unknown',
+                'duration': track.duration_ms,
+                'cover_uri': f"https://{track.cover_uri.replace('%%', '300x300')}" if track.cover_uri else None
+            }
+            
+            db = get_db()
+            cursor = db.cursor()
+            
+            cursor.execute(
+                'INSERT INTO listening_history (user_id, track_id, track_data) VALUES (?, ?, ?)',
+                (user_id, f"yandex_{track_id}", json.dumps(track_data))
+            )
+            
+            activity_data = json.dumps({
+                'track': track.title,
+                'artist': ', '.join([artist.name for artist in track.artists]),
+                'track_id': f"yandex_{track_id}",
+                'service': 'yandex'
+            })
+            cursor.execute(
+                'INSERT INTO user_activity (user_id, activity_type, activity_data) VALUES (?, ?, ?)',
+                (user_id, 'listen', activity_data)
+            )
+            
+            db.commit()
+            add_currency(user_id, 1, 'listen_track')
+            
+            return jsonify({
+                'url': download_url,
+                'title': track.title,
+                'artists': [artist.name for artist in track.artists],
+                'duration': track.duration_ms,
+                'cover_uri': track_data['cover_uri'],
+                'service': 'yandex'
+            })
         
         elif service == 'vk':
-            vk_client = get_vk_client(user[0])
+            vk_client = get_vk_client(user_id)
             if not vk_client:
                 return jsonify({'error': 'Токен VK не настроен'}), 400
             
@@ -1436,22 +1930,20 @@ def get_track_url(service, track_id):
                 db = get_db()
                 cursor = db.cursor()
                 
-                # Сохраняем в историю прослушивания
                 vk_track_data = {
                     'title': track_data['title'],
                     'artists': [track_data['artist']],
                     'album': track_data.get('album', {}).get('title', 'Unknown Album'),
-                    'genre': 'Unknown',  # VK не предоставляет жанр
+                    'genre': 'Unknown',
                     'duration': track_data['duration'] * 1000,
                     'cover_uri': track_data.get('album', {}).get('thumb', {}).get('photo_300') if track_data.get('album') else None
                 }
                 
                 cursor.execute(
                     'INSERT INTO listening_history (user_id, track_id, track_data) VALUES (?, ?, ?)',
-                    (user[0], f"vk_{track_id}", json.dumps(vk_track_data))
+                    (user_id, f"vk_{track_id}", json.dumps(vk_track_data))
                 )
                 
-                # Сохраняем в общую активность
                 activity_data = json.dumps({
                     'track': track_data['title'],
                     'artist': track_data['artist'],
@@ -1460,7 +1952,7 @@ def get_track_url(service, track_id):
                 })
                 cursor.execute(
                     'INSERT INTO user_activity (user_id, activity_type, activity_data) VALUES (?, ?, ?)',
-                    (user[0], 'listen', activity_data)
+                    (user_id, 'listen', activity_data)
                 )
                 
                 db.commit()
@@ -1483,16 +1975,16 @@ def get_track_url(service, track_id):
     except Exception as e:
         logger.error(f"Track URL error: {e}")
         return jsonify({'error': str(e)}), 500
-
+    
 @app.route('/api/settings', methods=['GET', 'POST'])
 @login_required
 def user_settings():
     db = get_db()
     cursor = db.cursor()
-    user = get_current_user()
+    user_id = get_current_user_id()
     
     if request.method == 'GET':
-        cursor.execute('SELECT * FROM user_settings WHERE user_id = ?', (user[0],))
+        cursor.execute('SELECT * FROM user_settings WHERE user_id = ?', (user_id,))
         settings = cursor.fetchone()
         
         if settings:
@@ -1513,7 +2005,7 @@ def user_settings():
             (user_id, theme, language, auto_play, show_explicit, music_service)
             VALUES (?, ?, ?, ?, ?, ?)
         ''', (
-            user[0],
+            user_id,
             data.get('theme', 'dark'),
             data.get('language', 'ru'),
             data.get('auto_play', True),
@@ -1603,7 +2095,7 @@ def force_resend_verification():
 @login_required
 def get_friends():
     try:
-        user = get_current_user()
+        user_id = get_current_user_id()
         db = get_db()
         cursor = db.cursor()
         
@@ -1618,7 +2110,7 @@ def get_friends():
             END
             WHERE (f.user_id = ? OR f.friend_id = ?) 
             AND f.status IN ('accepted', 'pending')
-        ''', (user[0], user[0], user[0], user[0]))
+        ''', (user_id, user_id, user_id, user_id))
         
         friends = []
         for row in cursor.fetchall():
@@ -1641,7 +2133,7 @@ def get_friends():
 @login_required
 def add_friend(friend_id):
     try:
-        user = get_current_user()
+        user_id = get_current_user_id()
         db = get_db()
         cursor = db.cursor()
         
@@ -1649,7 +2141,7 @@ def add_friend(friend_id):
             SELECT * FROM friends 
             WHERE (user_id = ? AND friend_id = ?) 
             OR (user_id = ? AND friend_id = ?)
-        ''', (user[0], friend_id, friend_id, user[0]))
+        ''', (user_id, friend_id, friend_id, user_id))
         
         existing = cursor.fetchone()
         if existing:
@@ -1660,14 +2152,14 @@ def add_friend(friend_id):
         cursor.execute('''
             INSERT INTO friends (user_id, friend_id, taste_match, status)
             VALUES (?, ?, ?, 'pending')
-        ''', (user[0], friend_id, taste_match))
+        ''', (user_id, friend_id, taste_match))
         
         db.commit()
         
         cursor.execute('''
             INSERT INTO user_activity (user_id, activity_type, activity_data)
             VALUES (?, 'friend', ?)
-        ''', (user[0], json.dumps({'friend_id': friend_id})))
+        ''', (user_id, json.dumps({'friend_id': friend_id})))
         
         db.commit()
         
@@ -1679,7 +2171,7 @@ def add_friend(friend_id):
 @login_required
 def get_user_activity():
     try:
-        user = get_current_user()
+        user_id = get_current_user_id()
         db = get_db()
         cursor = db.cursor()
         
@@ -1689,7 +2181,7 @@ def get_user_activity():
             WHERE user_id = ? 
             ORDER BY created_at DESC 
             LIMIT 20
-        ''', (user[0],))
+        ''', (user_id,))
         
         activities = []
         for row in cursor.fetchall():
@@ -1723,11 +2215,10 @@ def get_user_activity():
 def user_themes():
     db = get_db()
     cursor = db.cursor()
-    user = get_current_user()
+    user_id = get_current_user_id()
     
     if request.method == 'GET':
-        # Получаем кастомные темы пользователя
-        cursor.execute('SELECT * FROM user_themes WHERE user_id = ?', (user[0],))
+        cursor.execute('SELECT * FROM user_themes WHERE user_id = ?', (user_id,))
         themes = cursor.fetchall()
         
         # Стандартные пресеты
@@ -1789,8 +2280,7 @@ def user_themes():
     
     elif request.method == 'POST':
         data = request.get_json()
-        
-        # Проверяем обязательные поля
+
         if not data or 'name' not in data or 'colors' not in data:
             return jsonify({'success': False, 'error': 'Отсутствуют обязательные поля: name и colors'}), 400
         
@@ -1799,7 +2289,7 @@ def user_themes():
                 INSERT INTO user_themes (user_id, name, colors, background_url, is_default)
                 VALUES (?, ?, ?, ?, ?)
             ''', (
-                user[0],
+                user_id,
                 data['name'],
                 json.dumps(data['colors']),
                 data.get('background_url'),
@@ -1811,14 +2301,15 @@ def user_themes():
         except Exception as e:
             logger.error(f"Theme creation error: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/themes/<int:theme_id>', methods=['DELETE'])
 @login_required
 def delete_theme(theme_id):
     db = get_db()
     cursor = db.cursor()
-    user = get_current_user()
+    user_id = get_current_user_id()
     
-    cursor.execute('DELETE FROM user_themes WHERE id = ? AND user_id = ?', (theme_id, user[0]))
+    cursor.execute('DELETE FROM user_themes WHERE id = ? AND user_id = ?', (theme_id, user_id))
     db.commit()
     
     return jsonify({'success': True})
@@ -1827,7 +2318,7 @@ def delete_theme(theme_id):
 @login_required
 def get_listening_history():
     try:
-        user = get_current_user()
+        user_id = get_current_user_id()
         db = get_db()
         cursor = db.cursor()
         
@@ -1837,7 +2328,7 @@ def get_listening_history():
             WHERE user_id = ? 
             ORDER BY played_at DESC 
             LIMIT 10
-        ''', (user[0],))
+        ''', (user_id,))
         
         history = []
         for row in cursor.fetchall():
@@ -1853,6 +2344,35 @@ def get_listening_history():
         logger.error(f"Listening history error: {e}")
         return jsonify([])
 
+@app.route('/api/daily_reward', methods=['POST'])
+@login_required
+def daily_reward():
+    try:
+        user_id = get_current_user_id()
+        db = get_db()
+        cursor = db.cursor()
+        
+        # Проверяем, получал ли пользователь награду сегодня
+        cursor.execute('''
+            SELECT created_at FROM currency_transactions 
+            WHERE user_id = ? AND reason = 'daily_reward' 
+            AND date(created_at) = date('now')
+        ''', (user_id,))
+        
+        if cursor.fetchone():
+            return jsonify({'success': False, 'message': 'Вы уже получали награду сегодня'})
+        
+        # Добавляем награду
+        amount = random.randint(10, 25)
+        if add_currency(user_id, amount, 'daily_reward'):
+            return jsonify({'success': True, 'message': f'Получено {amount} монет!', 'amount': amount})
+        else:
+            return jsonify({'success': False, 'message': 'Ошибка выдачи награды'})
+            
+    except Exception as e:
+        logger.error(f"Daily reward error: {e}")
+        return jsonify({'success': False, 'message': 'Ошибка сервера'})
+
 @app.errorhandler(500)
 def internal_error(error):
     logger.error(f"Server Error: {error}")
@@ -1861,6 +2381,16 @@ def internal_error(error):
 @app.errorhandler(404)
 def not_found(error):
     return jsonify({'error': 'Not found'}), 404
+
+@app.route('/api/debug/tables')
+def debug_tables():
+    try:
+        with app.app_context():
+            inspector = db.inspect(db.engine)
+            tables = inspector.get_table_names()
+            return jsonify({'tables': tables})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5001)
