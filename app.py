@@ -97,25 +97,20 @@ def init_shop_data():
             ('Аватар "Лунный свет"', 'avatar', 'avatars', 25,
              '{"image_url": "/static/shop/avatars/moon.png", "unlockable": true}', 'common'),
             
-            ('Баннер "Г"', 'profile_banner', 'banners', 40,
-             '{"image_url": "/static/shop/banners/xz2.jpg", "preview": "/static/shop/banners/xz2.jpg"}', 'common'),
-            ('Баннер "Огненный дракон"', 'profile_banner', 'banners', 120,
-             '{"image_url": "/static/shop/banners/kruto.gif", "preview": "/static/shop/banners/kruto.gif", "animation": "gif"}', 'legendary'),
-            ('Баннер "zxc"', 'profile_banner', 'banners', 120,
-             '{"image_url": "/static/shop/banners/kruto1.gif", "preview": "/static/shop/banners/kruto1.gif", "animation": "gif"}', 'legendary'),
-            ('Баннер "вас крутой"', 'profile_banner', 'banners', 120,
-             '{"image_url": "/static/shop/banners/kruto2.gif", "preview": "/static/shop/banners/kruto2.gif", "animation": "gif"}', 'legendary'),
-            ('Баннер "крутой вас"', 'profile_banner', 'banners', 120,
-             '{"image_url": "/static/shop/banners/kruto3.gif", "preview": "/static/shop/banners/kruto3.gif", "animation": "gif"}', 'legendary'),
-            ('Баннер "крутой"', 'profile_banner', 'banners', 120,
-             '{"image_url": "/static/shop/banners/kruto.gif", "preview": "/static/shop/banners/kruto.gif", "animation": "gif"}', 'legendary'),
-
-            ('Баннер "К"', 'profile_banner', 'banners', 45,
+            ('Баннер "хз"', 'profile_banner', 'banners', 45,
              '{"image_url": "/static/shop/banners/xz1.jpg", "preview": "/static/shop/banners/xz1.jpg"}', 'rare'),
-
-            ('Баннер "Г"', 'profile_banner', 'banners', 35,
-             '{"image_url": "/static/shop/banners/xz.jpg", "preview": "/static/shop/banners/xz.jpg"}', 'common'),
             
+            ('Баннер "фы"', 'profile_banner', 'banners', 35,
+             '{"image_url": "/static/shop/banners/xz2.jpg", "preview": "/static/shop/banners/xz2.jpg"}', 'common'),
+            
+            ('Баннер "уй"', 'profile_banner', 'banners', 55,
+             '{"image_url": "/static/shop/banners/xz.jpg", "preview": "/static/shop/banners/xz.jpg"}', 'epic'),
+            # Анимированные баннеры (GIF)
+            ('Баннер "Огненный дракон"', 'profile_banner', 'banners', 10,
+             '{"image_url": "/static/shop/banners/dragon.gif", "preview": "/static/shop/banners/dragon.gif", "animation": "gif"}', 'legendary'),
+            
+            ('Баннер "Космическое сияние"', 'profile_banner', 'banners', 10,
+             '{"image_url": "/static/shop/banners/kruto1.gif", "preview": "/static/shop/banners/kruto2.gif", "animation": "gif"}', 'legendary'),
             ('Бейдж "Меломан"', 'badge', 'badges', 15,
              '{"text": "🎵 Меломан", "color": "#ff6b6b", "animation": "pulse"}', 'common'),
             
@@ -1387,7 +1382,30 @@ def save_token():
         
     except Exception as e:
         return jsonify({'success': False, 'message': f'Ошибка сохранения: {str(e)}'})
-
+@app.route('/api/admin/clean_inventory', methods=['POST'])
+@login_required
+@admin_required
+def clean_inventory():
+    try:
+        # Находим все предметы в инвентаре, которых нет в магазине
+        invalid_items = db.session.query(UserInventory).join(
+            ShopItem, UserInventory.item_id == ShopItem.id, isouter=True
+        ).filter(ShopItem.id.is_(None)).all()
+        
+        # Удаляем их
+        for item in invalid_items:
+            db.session.delete(item)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Удалено {len(invalid_items)} несуществующих предметов из инвентарей'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
 @app.route('/api/recommendations')
 @login_required
 def get_recommendations():
@@ -1401,7 +1419,55 @@ def get_recommendations():
     except Exception as e:
         logger.error(f"Recommendations error: {e}")
         return jsonify([])
-
+# Добавьте в app.py функцию для полного сброса
+@app.route('/api/admin/reset_database', methods=['POST'])
+@login_required
+@admin_required
+def reset_database():
+    try:
+        # Удаляем все таблицы
+        db.drop_all()
+        
+        # Создаем заново
+        db.create_all()
+        
+        # Инициализируем данные
+        init_shop_data()
+        create_admin_user()
+        
+        return jsonify({'success': True, 'message': 'База данных полностью пересоздана'})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+    
+# В app.py добавьте
+@app.route('/api/profile/unequip_all_banners', methods=['POST'])
+@login_required
+def unequip_all_banners():
+    try:
+        user_id = get_current_user_id()
+        
+        # Снимаем все баннеры
+        banner_items = db.session.query(UserInventory).join(
+            ShopItem, UserInventory.item_id == ShopItem.id
+        ).filter(
+            UserInventory.user_id == user_id,
+            ShopItem.type == 'profile_banner',
+            UserInventory.equipped == True
+        ).all()
+        
+        for item in banner_items:
+            item.equipped = False
+        
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Все баннеры сняты'})
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
+    
+    
 @app.route('/api/playlists')
 @login_required
 def get_playlists():

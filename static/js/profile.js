@@ -1,6 +1,4 @@
-// profile.js - полный рабочий код с поддержкой GIF баннеров
 
-// ========== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ==========
 let currentFriendsTab = 'all';
 let friendsList = [];
 let audioPlayer = null;
@@ -8,14 +6,13 @@ let currentItems = [];
 let selectedCategory = 'all';
 let currentPurchaseItem = null;
 
-// ========== КОНСТАНТЫ ==========
+
 const standardBadges = [
     { icon: 'music', text: 'Музыкант', color: '#007bff' },
     { icon: 'heart', text: 'Любитель музыки', color: '#e83e8c' },
     { icon: 'star', text: 'Активный слушатель', color: '#ffc107' }
 ];
 
-// ========== ИНИЦИАЛИЗАЦИЯ ==========
 document.addEventListener('DOMContentLoaded', function() {
     loadProfileData();
     setupProfileForm();
@@ -29,7 +26,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadUserSettings();
     loadEquippedItems();
     
-    // Добавляем контейнер для бейджей в баннер
+
     const bannerOverlay = document.querySelector('.banner-overlay');
     if (bannerOverlay && !document.getElementById('userBadges')) {
         const badgesContainer = document.createElement('div');
@@ -39,7 +36,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// ========== ОСНОВНЫЕ ФУНКЦИИ ПРОФИЛЯ ==========
 function showTab(tabName) {
     document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
     document.querySelectorAll('.profile-tab').forEach(btn => btn.classList.remove('active'));
@@ -65,7 +61,83 @@ async function loadProfileData() {
         showNotification('Ошибка загрузки профиля', 'error');
     }
 }
+function updateProfileAppearance(equippedItems) {
+    console.log('Equipped items:', equippedItems);
+    
+    const banner = document.getElementById('profileBanner');
+    if (!banner) return;
+    
 
+    banner.innerHTML = '';
+    banner.style.backgroundImage = 'none';
+    
+
+    const overlay = document.createElement('div');
+    overlay.className = 'banner-overlay';
+    overlay.innerHTML = `
+        <h2 id="bannerUsername">${document.getElementById('bannerUsername').textContent}</h2>
+        <p id="bannerBio">${document.getElementById('bannerBio').textContent}</p>
+        <div class="user-badges" id="userBadges"></div>
+    `;
+    
+    const editBtn = document.createElement('button');
+    editBtn.className = 'banner-edit-btn';
+    editBtn.onclick = openBannerShop;
+    editBtn.innerHTML = '<i class="fas fa-camera"></i> Сменить баннер';
+    
+
+    if (equippedItems.profile_banner && equippedItems.profile_banner.data) {
+        const bannerData = equippedItems.profile_banner.data;
+        const bannerUrl = bannerData.image_url;
+        
+        if (bannerUrl) {
+            const isGif = bannerUrl.toLowerCase().endsWith('.gif') || 
+                          (bannerData.animation && bannerData.animation === 'gif');
+            
+            if (isGif) {
+
+                const img = document.createElement('img');
+                img.src = bannerUrl;
+                img.alt = "Баннер профиля";
+                img.style.width = '100%';
+                img.style.height = '100%';
+                img.style.objectFit = 'cover';
+                img.style.borderRadius = '12px';
+                img.onerror = function() {
+                    this.src = '/static/default-banner.jpg';
+                    this.onerror = null;
+                };
+                banner.appendChild(img);
+            } else {
+
+                banner.style.backgroundImage = `url('${bannerUrl}')`;
+                banner.style.backgroundSize = 'cover';
+                banner.style.backgroundPosition = 'center';
+                banner.style.backgroundRepeat = 'no-repeat';
+            }
+        }
+    } else {
+
+        banner.style.backgroundImage = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+    }
+    
+
+    banner.appendChild(overlay);
+    banner.appendChild(editBtn);
+    
+
+    if (equippedItems.avatar && equippedItems.avatar.data && equippedItems.avatar.data.image_url) {
+        const avatarPreview = document.getElementById('avatarPreview');
+        if (avatarPreview) {
+            const avatarUrl = equippedItems.avatar.data.image_url;
+            avatarPreview.innerHTML = `
+                <img src="${avatarUrl}" alt="Аватар" 
+                     onerror="this.src='/static/default-avatar.png';this.onerror=null;"
+                     style="width:100%;height:100%;border-radius:50%;object-fit:cover;">
+            `;
+        }
+    }
+}
 function updateProfileForm(profile) {
     if (profile && profile.local) {
         document.getElementById('display_name').value = profile.local.display_name || '';
@@ -299,7 +371,7 @@ function updateUserStats(stats) {
     }
 }
 
-// ========== ФУНКЦИИ МАГАЗИНА ==========
+
 async function loadShopItems() {
     try {
         showLoading('shopItems', 'Загрузка товаров...');
@@ -402,7 +474,7 @@ async function confirmPurchase() {
     }
 }
 
-// ========== ФУНКЦИИ ИНВЕНТАРЯ ==========
+
 async function loadUserInventory() {
     try {
         showLoading('inventoryGrid', 'Загрузка инвентаря...');
@@ -468,7 +540,7 @@ async function equipItem(itemId) {
     }
 }
 
-// ========== ФУНКЦИИ ДЛЯ ОТОБРАЖЕНИЯ ЭКИПИРОВАННЫХ ПРЕДМЕТОВ ==========
+
 async function loadEquippedItems() {
     try {
         const response = await fetch('/api/profile/equipped');
@@ -488,7 +560,7 @@ function updateProfileAppearance(equippedItems) {
     // Обновляем баннер
     const banner = document.getElementById('profileBanner');
     if (banner) {
-        // Сохраняем исходный HTML баннера
+
         const originalHtml = banner.innerHTML;
         
         if (equippedItems.profile_banner && equippedItems.profile_banner.data) {
@@ -517,13 +589,13 @@ function updateProfileAppearance(equippedItems) {
                         </button>
                     `;
                 } else {
-                    // Для обычных изображений используем background
+
                     banner.style.backgroundImage = `url('${bannerUrl}')`;
                     banner.style.backgroundSize = 'cover';
                     banner.style.backgroundPosition = 'center';
                     banner.style.backgroundRepeat = 'no-repeat';
                     
-                    // Восстанавливаем оверлей и кнопку
+
                     const overlay = banner.querySelector('.banner-overlay');
                     const editBtn = banner.querySelector('.banner-edit-btn');
                     if (!overlay) {
@@ -546,19 +618,19 @@ function updateProfileAppearance(equippedItems) {
                 }
             }
         } else {
-            // Стандартный градиент если баннер не установлен
+
             banner.style.backgroundImage = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
             banner.style.backgroundSize = 'cover';
             banner.style.backgroundPosition = 'center';
             
-            // Восстанавливаем исходный HTML если он был потерян
+
             if (!banner.querySelector('.banner-overlay')) {
                 banner.innerHTML = originalHtml;
             }
         }
     }
 
-    // Обновляем аватар
+
     if (equippedItems.avatar && equippedItems.avatar.data && equippedItems.avatar.data.image_url) {
         const avatarPreview = document.getElementById('avatarPreview');
         if (avatarPreview) {
@@ -579,7 +651,7 @@ function updateEquippedBadges(equippedItems) {
 
     badgesContainer.innerHTML = '';
 
-    // Добавляем экипированные бейджи
+
     if (equippedItems.badge && equippedItems.badge.data) {
         const badge = createBadgeElement(equippedItems.badge);
         badgesContainer.appendChild(badge);
@@ -644,10 +716,10 @@ function handleImageError(imgElement, fallbackUrl) {
     imgElement.src = fallbackUrl;
 }
 
-// ========== ФУНКЦИИ МАГАЗИНА БАННЕРОВ ==========
+
 function openBannerShop() {
     showTab('shop');
-    // Автоматически выбираем категорию баннеров
+
     setTimeout(() => {
         const bannerCategory = document.querySelector('[data-category="banners"]');
         if (bannerCategory) {
@@ -656,7 +728,7 @@ function openBannerShop() {
     }, 100);
 }
 
-// ========== ФУНКЦИИ ДРУЗЕЙ ==========
+
 async function loadFriends() {
     try {
         const response = await fetch('/api/friends');
@@ -843,7 +915,7 @@ function viewFriendProfile(friendId) {
     window.location.href = `/profile/${friendId}`;
 }
 
-// ========== ФУНКЦИИ АКТИВНОСТИ ==========
+
 async function loadActivityFeed() {
     try {
         showLoading('activityFeed', 'Загрузка активности...');
@@ -916,7 +988,7 @@ function getActivityText(activity) {
     }
 }
 
-// ========== ФУНКЦИИ АУДИОПЛЕЕРА ==========
+
 function initAudioPlayer() {
     audioPlayer = document.getElementById('audioPlayer');
     if (!audioPlayer) {
@@ -1003,7 +1075,7 @@ async function playTrack(trackId) {
     }
 }
 
-// ========== ФУНКЦИИ НАСТРОЕК ==========
+
 async function loadUserSettings() {
     try {
         const response = await fetch('/api/settings');
@@ -1052,7 +1124,6 @@ function setupSettingsForm() {
             if (response.ok) {
                 showNotification('Настройки сохранены', 'success');
                 closeModal('settingsModal');
-                // Применяем тему сразу
                 if (data.theme) {
                     document.documentElement.setAttribute('data-theme', data.theme);
                 }
@@ -1063,7 +1134,6 @@ function setupSettingsForm() {
     });
 }
 
-// ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
 function getItemIcon(type) {
     const icons = {
         'theme': 'palette',
@@ -1170,7 +1240,6 @@ function showLoading(elementId, message) {
     }
 }
 
-// ========== УТИЛИТЫ ==========
 function openModal(modalId) {
     document.getElementById(modalId).style.display = 'block';
 }
@@ -1219,5 +1288,5 @@ function switchTab(tabName) {
     window.location.href = `/${tabName}`;
 }
 
-// Инициализация форм
+
 setupSettingsForm();

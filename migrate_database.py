@@ -6,9 +6,7 @@ import os
 
 def migrate_database():
     with app.app_context():
-        # 1. Проверяем и добавляем поле equipped_at если его нет
         try:
-            # Проверяем существование таблицы user_inventory
             inspector = db.inspect(db.engine)
             if 'user_inventory' in inspector.get_table_names():
                 columns = [col['name'] for col in inspector.get_columns('user_inventory')]
@@ -22,7 +20,6 @@ def migrate_database():
         except Exception as e:
             print(f"Error checking user_inventory: {e}")
 
-        # 2. Проверяем и добавляем поле is_active в shop_items если его нет
         try:
             if 'shop_items' in inspector.get_table_names():
                 columns = [col['name'] for col in inspector.get_columns('shop_items')]
@@ -36,12 +33,10 @@ def migrate_database():
         except Exception as e:
             print(f"Error checking shop_items: {e}")
 
-        # 3. Проверяем существование старых SQLite таблиц и создаем если нужно
         try:
             conn = sqlite3.connect('itired.db')
             cursor = conn.cursor()
             
-            # Таблица пользователей (если не создана через SQLAlchemy)
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS users (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,7 +56,6 @@ def migrate_database():
                 )
             ''')
             
-            # Другие необходимые таблицы...
             print("SQLite tables checked/created successfully!")
             
         except Exception as e:
